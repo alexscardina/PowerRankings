@@ -102,14 +102,14 @@ body {
   color: var(--muted-on-dark);
   font-size: 1.05rem;
   line-height: 1.55;
-  max-width: 42rem;
+  white-space: pre-wrap;
 }
 
 .week-intro-edit {
   display: grid;
   gap: 0.45rem;
   margin: 0 0 1.5rem;
-  max-width: 42rem;
+  width: 100%;
 }
 
 .week-intro-edit__label {
@@ -460,6 +460,7 @@ body {
   margin: 0;
   color: var(--ink);
   line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .team-rank-card__blurb-input {
