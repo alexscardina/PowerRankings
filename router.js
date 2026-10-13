@@ -20,7 +20,7 @@ router.get("/league", async (req, res) => {
 
     const data = await getLeagueData(
       2026,
-      ["mTeam", "mRoster", "mMatchupScore"],
+      ["mTeam", "mRoster", "mMatchupScore", "mSettings"],
       Number.isFinite(scoringPeriodId) ? scoringPeriodId : undefined
     );
     res.json(data);

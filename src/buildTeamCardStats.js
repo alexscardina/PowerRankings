@@ -6,7 +6,20 @@ export function getCompletedWeek(leagueData) {
   return Math.max(1, current - 1);
 }
 
-function getWeekPoints(entry, week) {
+function scoringPointsByStatId(leagueData) {
+  const items = leagueData?.settings?.scoringSettings?.scoringItems;
+  if (!Array.isArray(items) || !items.length) return null;
+
+  const pointsByStatId = new Map();
+  for (const item of items) {
+    if (item?.statId == null || typeof item.points !== "number") continue;
+    pointsByStatId.set(Number(item.statId), item.points);
+  }
+  return pointsByStatId.size ? pointsByStatId : null;
+}
+
+/** League-settings fantasy points for a week (half-PPR, etc.). */
+function getWeekPoints(entry, week, pointsByStatId) {
   const stats = entry?.playerPoolEntry?.player?.stats || [];
   const actual = stats.find(
     (stat) =>
@@ -14,12 +27,35 @@ function getWeekPoints(entry, week) {
       stat.statSourceId === 0 &&
       stat.statSplitTypeId === 1
   );
-  return actual?.appliedTotal ?? null;
+  if (!actual) return null;
+
+  if (pointsByStatId && actual.stats && typeof actual.stats === "object") {
+    let total = 0;
+    let scored = false;
+    for (const [statId, value] of Object.entries(actual.stats)) {
+      const points = pointsByStatId.get(Number(statId));
+      if (points == null || typeof value !== "number") continue;
+      total += points * value;
+      scored = true;
+    }
+    if (scored) return total;
+  }
+
+  // Fall back to ESPN appliedTotal only if league settings were unavailable
+  return actual.appliedTotal ?? null;
 }
 
 function playerHeadshotUrl(playerId) {
   if (!playerId) return null;
   return `https://a.espncdn.com/i/headshots/nfl/players/full/${playerId}.png`;
+}
+
+// ESPN lineupSlotId: 20 = Bench, 21 = IR
+const NON_STARTER_SLOTS = new Set([20, 21]);
+
+function isStarterEntry(entry) {
+  const slot = entry?.lineupSlotId;
+  return typeof slot === "number" && !NON_STARTER_SLOTS.has(slot);
 }
 
 export function ordinal(n) {
@@ -146,6 +182,7 @@ export default function buildTeamCardStats(
   );
   const places = scoringPlaces(matchups);
   const records = recordsThroughWeek(schedule, week);
+  const pointsByStatId = scoringPointsByStatId(leagueData);
   const byTeamId = {};
 
   for (const matchup of matchups) {
@@ -191,7 +228,8 @@ export default function buildTeamCardStats(
     let topPlayer = null;
 
     for (const entry of entries) {
-      const weekPts = getWeekPoints(entry, week);
+      if (!isStarterEntry(entry)) continue;
+      const weekPts = getWeekPoints(entry, week, pointsByStatId);
       if (weekPts == null) continue;
       if (!topPlayer || weekPts > topPlayer.points) {
         topPlayer = {
