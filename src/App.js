@@ -221,7 +221,7 @@ export default function App() {
       if (blurbTimer.current) clearTimeout(blurbTimer.current);
       if (introTimer.current) clearTimeout(introTimer.current);
     };
-  }, [selectedWeek]);
+  }, [selectedWeek, showAdminGate]);
 
   async function saveRankings(payload) {
     const res = await fetch('/api/rankings', {
