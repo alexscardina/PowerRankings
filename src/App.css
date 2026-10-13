@@ -1,7 +1,9 @@
 :root {
   --ink: #14201a;
+  --text: #f2f6f3;
   --muted: #5c6b63;
-  --paper: #f3efe6;
+  --muted-on-dark: #b7c7be;
+  --paper: #0f2e22;
   --card: #fffdf8;
   --line: #d7d0c2;
   --accent: #1f6b4a;
@@ -10,15 +12,15 @@
 body {
   margin: 0;
   font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  color: var(--ink);
+  color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(31, 107, 74, 0.12), transparent 40%),
-    linear-gradient(180deg, #ebe4d6 0%, var(--paper) 45%, #e7e1d4 100%);
+    radial-gradient(circle at top left, rgba(62, 140, 102, 0.22), transparent 45%),
+    linear-gradient(180deg, #164433 0%, #0f2e22 50%, #0b241a 100%);
   min-height: 100vh;
 }
 
 .app {
-  max-width: 42rem;
+  max-width: 56rem;
   margin: 0 auto;
   padding: 2rem 1.25rem 4rem;
 }
@@ -63,9 +65,9 @@ body {
 }
 
 .admin-panel button {
-  border: 1px solid var(--ink);
-  background: var(--ink);
-  color: #fff;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--ink);
   border-radius: 0.4rem;
   padding: 0.45rem 0.8rem;
   font: inherit;
@@ -74,13 +76,13 @@ body {
 
 .admin-panel button.secondary {
   background: transparent;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .admin-panel__status {
   width: 100%;
   margin: 0;
-  color: var(--muted);
+  color: var(--muted-on-dark);
   font-size: 0.9rem;
 }
 
@@ -88,34 +90,74 @@ body {
   color: #9b2c2c;
 }
 
+.week-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.week-nav__btn {
+  border: 1px solid rgba(242, 246, 243, 0.35);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.week-nav__btn.is-active {
+  background: var(--text);
+  color: var(--ink);
+  border-color: var(--text);
+}
+
 .power-rankings-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .team-rank-card {
   background: var(--card);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 0.75rem;
   box-shadow: 0 8px 24px rgba(20, 32, 26, 0.06);
-  touch-action: none;
+  overflow: hidden;
 }
 
 .team-rank-card__top {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.9rem;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem 1rem;
   align-items: center;
-  padding: 1rem 1.1rem;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.team-rank-card__top.is-admin {
+  grid-template-columns: auto auto 1fr auto;
+}
+
+.team-rank-card__drag {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  font-size: 1rem;
+  letter-spacing: -0.12em;
+  padding: 0.25rem;
+  touch-action: none;
 }
 
 .team-rank-card__rank {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5rem;
-  height: 2.5rem;
+  min-width: 2.4rem;
+  height: 2.4rem;
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
@@ -123,28 +165,220 @@ body {
   font-size: 1.1rem;
 }
 
+.team-rank-card__change-wrap {
+  justify-self: end;
+}
+
+.team-rank-card__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.team-rank-card__change.is-up {
+  color: #1f6b4a;
+}
+
+.team-rank-card__change.is-down {
+  color: #b42318;
+}
+
+.team-rank-card__change.is-same {
+  color: #8a8f8c;
+}
+
 .team-rank-card__meta {
-  display: grid;
-  gap: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.85rem;
   min-width: 0;
 }
 
 .team-rank-card__owner {
-  color: var(--muted);
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  color: var(--ink);
+  font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .team-rank-card__name {
-  font-size: 1.15rem;
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 1rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .team-rank-card__record {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  font-size: 1.2rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.team-rank-card__middle {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(15, 46, 34, 0.04);
+}
+
+.team-rank-card__matchup {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.team-rank-card__week-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 2px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgba(20, 32, 26, 0.06);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.team-rank-card__matchup p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.matchup-result {
+  font-weight: 600;
+}
+
+.matchup-result.is-win {
+  color: #1f6b4a;
+}
+
+.matchup-result.is-loss {
+  color: #b42318;
+}
+
+.week-nav__btn.is-draft {
+  border-style: dashed;
+  opacity: 0.95;
+}
+
+.team-rank-card__median {
+  width: fit-content;
+  max-width: 100%;
+  font-weight: 600;
+}
+
+.team-rank-card__median.is-up {
+  color: #1f6b4a;
+}
+
+.team-rank-card__median.is-down {
+  color: #9b2c2c;
+}
+
+.team-rank-card__median.is-trophy {
+  color: #8a6a00;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 2px solid #d4af37;
+  background: rgba(212, 175, 55, 0.12);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+}
+
+.team-rank-card__median.is-poop {
+  color: #5c3a1e;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 2px solid #8b5a2b;
+  background: rgba(139, 90, 43, 0.12);
+  box-shadow: 0 0 0 1px rgba(101, 67, 33, 0.35);
+}
+
+.team-rank-card__player {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 11rem;
+}
+
+.team-rank-card__headshot {
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #dfe8e2;
+  display: grid;
+  place-items: center;
+}
+
+.team-rank-card__headshot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.team-rank-card__headshot-fallback {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.team-rank-card__player-label,
+.team-rank-card__player-pts {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.team-rank-card__player-name {
+  display: block;
+  font-weight: 700;
+  font-size: 0.98rem;
+}
+
+.team-rank-card__bottom {
+  padding: 1rem 1.5rem 1.25rem;
+}
+
+.team-rank-card__blurb {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.team-rank-card__blurb-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+  background: #fff;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .team-rank-card__middle {
+    grid-template-columns: 1fr;
+  }
 }

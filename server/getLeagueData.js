@@ -3,15 +3,18 @@ const axios = require("axios");
 const ESPN_BASE =
   "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl";
 
-async function getLeagueData(season, view) {
+async function getLeagueData(season, view, scoringPeriodId) {
   const url =
     `${ESPN_BASE}/seasons/${season}/segments/0/leagues/` +
     `${process.env.LEAGUE_ID}`;
 
+  const params = { view };
+  if (scoringPeriodId != null) {
+    params.scoringPeriodId = scoringPeriodId;
+  }
+
   const response = await axios.get(url, {
-    params: {
-      view
-    },
+    params,
     // ESPN expects ?view=mTeam&view=mRoster, not view[]=
     paramsSerializer: {
       indexes: null

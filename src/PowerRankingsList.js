@@ -13,9 +13,19 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
+import { rankDelta } from './rankUtils';
 import TeamRankCard from './TeamRankCard';
 
-export default function PowerRankingsList({ teams, isAdmin, onReorder }) {
+export default function PowerRankingsList({
+  teams,
+  isAdmin,
+  onReorder,
+  cardStats,
+  blurbs,
+  teamNames,
+  onBlurbChange,
+  previousTeamIds
+}) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 }
@@ -24,6 +34,7 @@ export default function PowerRankingsList({ teams, isAdmin, onReorder }) {
       coordinateGetter: sortableKeyboardCoordinates
     })
   );
+  const currentTeamIds = teams.map((team) => team.id);
 
   function handleDragEnd(event) {
     if (!isAdmin) return;
@@ -53,8 +64,17 @@ export default function PowerRankingsList({ teams, isAdmin, onReorder }) {
             <TeamRankCard
               key={team.id}
               team={team}
+              teamName={
+                teamNames?.[String(team.id)] ||
+                teamNames?.[team.id] ||
+                team.name
+              }
               powerRank={teams.length - index}
+              rankChange={rankDelta(team.id, currentTeamIds, previousTeamIds)}
               isAdmin={isAdmin}
+              stats={cardStats?.byTeamId?.[team.id]}
+              blurb={blurbs[String(team.id)] || blurbs[team.id] || ''}
+              onBlurbChange={onBlurbChange}
             />
           ))}
         </div>
