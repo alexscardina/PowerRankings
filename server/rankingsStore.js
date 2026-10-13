@@ -51,8 +51,14 @@ function normalizeWeek(value) {
   return week;
 }
 
-function isNetlifyRuntime() {
-  return Boolean(process.env.NETLIFY || process.env.NETLIFY_DEV);
+function isServerlessRuntime() {
+  return Boolean(
+    process.env.NETLIFY ||
+      process.env.NETLIFY_DEV ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT ||
+      process.env.NETLIFY_BLOBS_CONTEXT
+  );
 }
 
 function normalize(data) {
@@ -100,7 +106,7 @@ function readRankingsFromFile() {
 }
 
 function writeRankingsToFile(next) {
-  if (isNetlifyRuntime()) {
+  if (isServerlessRuntime()) {
     throw new Error("Filesystem writes are not available on Netlify");
   }
 
@@ -132,7 +138,7 @@ function mergeMissingSeedWeeks(stored) {
 }
 
 async function readRankings() {
-  if (isNetlifyRuntime()) {
+  if (isServerlessRuntime()) {
     try {
       const store = await getBlobStore();
       const data = await store.get(BLOB_KEY, { type: "json" });
@@ -207,10 +213,17 @@ async function writeRankings(payload = {}) {
   const current = await readRankings();
   const next = buildNextRankings(current, payload);
 
-  if (isNetlifyRuntime()) {
-    const store = await getBlobStore();
-    await store.setJSON(BLOB_KEY, next);
-    return next;
+  if (isServerlessRuntime()) {
+    try {
+      const store = await getBlobStore();
+      await store.setJSON(BLOB_KEY, next);
+      return next;
+    } catch (error) {
+      throw new Error(
+        `Netlify Blobs write failed: ${error.message}. ` +
+          "Ensure Blobs is enabled for this site and the function can access it."
+      );
+    }
   }
 
   return writeRankingsToFile(next);
