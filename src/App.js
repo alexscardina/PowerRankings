@@ -140,7 +140,17 @@ export default function App() {
           }
           throw new Error(message);
         }
-        if (!rankingsRes.ok) throw new Error('Failed to load rankings');
+        if (!rankingsRes.ok) {
+          let message = 'Failed to load rankings';
+          try {
+            const body = await rankingsRes.json();
+            if (body?.error) message = body.error;
+            if (body?.details) message = `${message}: ${body.details}`;
+          } catch {
+            // ignore JSON parse errors
+          }
+          throw new Error(message);
+        }
 
         const data = await leagueRes.json();
         const rankings = await rankingsRes.json();

@@ -4,6 +4,9 @@ const path = require("path");
 const RANKINGS_PATH = path.join(__dirname, "..", "data", "rankings.json");
 const BLOB_KEY = "rankings.json";
 
+// Static require so Netlify/esbuild always bundles the seed data
+const SEED_RANKINGS = require("../data/rankings.json");
+
 function emptyWeek() {
   return { teamIds: [], blurbs: {}, names: {} };
 }
@@ -14,21 +17,8 @@ function asObject(value) {
     : {};
 }
 
-function useBlobs() {
+function isNetlifyRuntime() {
   return Boolean(process.env.NETLIFY || process.env.NETLIFY_DEV);
-}
-
-function ensureFile() {
-  const dir = path.dirname(RANKINGS_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(RANKINGS_PATH)) {
-    fs.writeFileSync(
-      RANKINGS_PATH,
-      JSON.stringify({ activeWeek: null, weeks: {} }, null, 2)
-    );
-  }
 }
 
 function normalize(data) {
@@ -67,13 +57,27 @@ function normalize(data) {
 }
 
 function readRankingsFromFile() {
-  ensureFile();
-  const raw = fs.readFileSync(RANKINGS_PATH, "utf8");
-  return normalize(JSON.parse(raw));
+  try {
+    if (fs.existsSync(RANKINGS_PATH)) {
+      const raw = fs.readFileSync(RANKINGS_PATH, "utf8");
+      return normalize(JSON.parse(raw));
+    }
+  } catch (error) {
+    console.error("Rankings file read failed:", error.message);
+  }
+
+  return normalize(SEED_RANKINGS);
 }
 
 function writeRankingsToFile(next) {
-  ensureFile();
+  if (isNetlifyRuntime()) {
+    throw new Error("Filesystem writes are not available on Netlify");
+  }
+
+  const dir = path.dirname(RANKINGS_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   fs.writeFileSync(RANKINGS_PATH, JSON.stringify(next, null, 2));
   return next;
 }
@@ -84,7 +88,7 @@ async function getBlobStore() {
 }
 
 async function readRankings() {
-  if (useBlobs()) {
+  if (isNetlifyRuntime()) {
     try {
       const store = await getBlobStore();
       const data = await store.get(BLOB_KEY, { type: "json" });
@@ -92,8 +96,10 @@ async function readRankings() {
         return normalize(data);
       }
     } catch (error) {
-      console.error("Blob read failed, falling back to file:", error.message);
+      console.error("Blob read failed, using seed rankings:", error.message);
     }
+
+    return normalize(SEED_RANKINGS);
   }
 
   return readRankingsFromFile();
@@ -151,14 +157,10 @@ async function writeRankings(payload = {}) {
   const current = await readRankings();
   const next = buildNextRankings(current, payload);
 
-  if (useBlobs()) {
-    try {
-      const store = await getBlobStore();
-      await store.setJSON(BLOB_KEY, next);
-      return next;
-    } catch (error) {
-      console.error("Blob write failed, falling back to file:", error.message);
-    }
+  if (isNetlifyRuntime()) {
+    const store = await getBlobStore();
+    await store.setJSON(BLOB_KEY, next);
+    return next;
   }
 
   return writeRankingsToFile(next);

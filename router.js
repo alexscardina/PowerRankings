@@ -39,7 +39,10 @@ router.get("/rankings", async (req, res) => {
     res.json(await readRankings());
   } catch (error) {
     console.error(error.message);
-    res.status(500).json({ error: "Failed to read rankings" });
+    res.status(500).json({
+      error: "Failed to read rankings",
+      details: error.message
+    });
   }
 });
 

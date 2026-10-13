@@ -8,7 +8,7 @@
   node_bundler = "esbuild"
 
 [functions.api]
-  included_files = ["data/rankings.json", "server/**", "router.js"]
+  included_files = ["data/**", "server/**", "router.js"]
 
 [[redirects]]
   from = "/api/*"
