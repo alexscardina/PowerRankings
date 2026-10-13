@@ -1,0 +1,150 @@
+:root {
+  --ink: #14201a;
+  --muted: #5c6b63;
+  --paper: #f3efe6;
+  --card: #fffdf8;
+  --line: #d7d0c2;
+  --accent: #1f6b4a;
+}
+
+body {
+  margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(31, 107, 74, 0.12), transparent 40%),
+    linear-gradient(180deg, #ebe4d6 0%, var(--paper) 45%, #e7e1d4 100%);
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.app__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.app h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 4vw, 2.4rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.admin-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-panel form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-panel input {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  font: inherit;
+  min-width: 10rem;
+}
+
+.admin-panel button {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-panel button.secondary {
+  background: transparent;
+  color: var(--ink);
+}
+
+.admin-panel__status {
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-panel__error {
+  color: #9b2c2c;
+}
+
+.power-rankings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.team-rank-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(20, 32, 26, 0.06);
+  touch-action: none;
+}
+
+.team-rank-card__top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+}
+
+.team-rank-card__rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.team-rank-card__meta {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.team-rank-card__owner {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.team-rank-card__name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-rank-card__record {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
