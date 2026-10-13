@@ -97,6 +97,14 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.week-intro {
+  margin: 0 0 1.5rem;
+  color: var(--muted-on-dark);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  max-width: 42rem;
+}
+
 .week-nav__btn {
   border: 1px solid rgba(242, 246, 243, 0.35);
   background: transparent;
@@ -316,6 +324,27 @@ body {
   gap: 0.75rem;
   align-items: center;
   min-width: 11rem;
+}
+
+.team-rank-card__draft-picks {
+  grid-template-columns: 1fr;
+  min-width: 12rem;
+}
+
+.team-rank-card__draft-picks .team-rank-card__player-label:not(:first-child) {
+  margin-top: 0.55rem;
+}
+
+.draft-label {
+  font-weight: 600;
+}
+
+.draft-label.is-strength {
+  color: #1f6b4a;
+}
+
+.draft-label.is-weakness {
+  color: #9b2c2c;
 }
 
 .team-rank-card__headshot {

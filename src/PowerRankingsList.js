@@ -22,9 +22,11 @@ export default function PowerRankingsList({
   onReorder,
   cardStats,
   blurbs,
+  draftNotes = {},
   teamNames,
   onBlurbChange,
-  previousTeamIds
+  previousTeamIds,
+  showMatchup = true
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -73,6 +75,10 @@ export default function PowerRankingsList({
               rankChange={rankDelta(team.id, currentTeamIds, previousTeamIds)}
               isAdmin={isAdmin}
               stats={cardStats?.byTeamId?.[team.id]}
+              draftNotes={
+                draftNotes[String(team.id)] || draftNotes[team.id] || null
+              }
+              showMatchup={showMatchup}
               blurb={blurbs[String(team.id)] || blurbs[team.id] || ''}
               onBlurbChange={onBlurbChange}
             />

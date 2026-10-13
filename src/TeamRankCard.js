@@ -44,6 +44,112 @@ function RankChange({ rankChange }) {
   );
 }
 
+function DraftMiddle({ draftNotes }) {
+  return (
+    <div className="team-rank-card__middle">
+      <div className="team-rank-card__matchup">
+        <span className="team-rank-card__week-badge">Draft Recap</span>
+        <p className="team-rank-card__matchup-line">
+          <span className="draft-label is-strength">Strengths:</span>{' '}
+          {draftNotes?.strengths || '—'}
+        </p>
+        <p className="team-rank-card__matchup-line">
+          <span className="draft-label is-weakness">Weaknesses:</span>{' '}
+          {draftNotes?.weaknesses || '—'}
+        </p>
+      </div>
+      <div className="team-rank-card__player team-rank-card__draft-picks">
+        <div>
+          <span className="team-rank-card__player-label">Best pick</span>
+          <span className="team-rank-card__player-name">
+            {draftNotes?.bestPick || '—'}
+          </span>
+          <span className="team-rank-card__player-label">Worst pick</span>
+          <span className="team-rank-card__player-name">
+            {draftNotes?.worstPick || '—'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MatchupMiddle({ stats, imgFailed, setImgFailed }) {
+  const isTopScorer = stats?.scoringPlace === 1;
+  const isBottomScorer = stats?.scoringPlace === 12;
+  const medianEmoji = isTopScorer ? ' 🏆' : isBottomScorer ? ' 💩' : '';
+  const medianLine =
+    stats?.medianResult && stats?.scoringPlaceLabel
+      ? `${stats.medianResult} ${stats.scoringPlaceLabel}${medianEmoji}`
+      : '—';
+  const medianClass = [
+    'team-rank-card__median',
+    stats?.medianResult === 'W' ? 'is-up' : '',
+    stats?.medianResult === 'L' ? 'is-down' : '',
+    isTopScorer ? 'is-trophy' : '',
+    isBottomScorer ? 'is-poop' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const topPlayer = stats?.topPlayer;
+
+  return (
+    <div className="team-rank-card__middle">
+      <div className="team-rank-card__matchup">
+        <span className="team-rank-card__week-badge">
+          Week {stats?.week || '—'}
+        </span>
+        {stats?.opponentName ? (
+          <p className="team-rank-card__matchup-line">
+            <span
+              className={
+                stats.result === 'W'
+                  ? 'matchup-result is-win'
+                  : stats.result === 'L'
+                    ? 'matchup-result is-loss'
+                    : 'matchup-result'
+              }
+            >
+              {stats.result}
+            </span>{' '}
+            {stats.points?.toFixed?.(1) ?? stats.points}–
+            {stats.oppPoints?.toFixed?.(1) ?? stats.oppPoints} vs{' '}
+            {stats.opponentOwner || stats.opponentName}
+          </p>
+        ) : (
+          <p className="team-rank-card__matchup-line">No matchup data</p>
+        )}
+        <p className={medianClass}>Median Performance: {medianLine}</p>
+      </div>
+      <div className="team-rank-card__player">
+        <div className="team-rank-card__headshot">
+          {topPlayer?.headshotUrl && !imgFailed ? (
+            <img
+              src={topPlayer.headshotUrl}
+              alt=""
+              onError={() => setImgFailed(true)}
+            />
+          ) : (
+            <span className="team-rank-card__headshot-fallback">
+              {topPlayer?.name?.slice(0, 1) || '?'}
+            </span>
+          )}
+        </div>
+        <div>
+          <span className="team-rank-card__player-label">Top performer</span>
+          <span className="team-rank-card__player-name">
+            {topPlayer?.name || '—'}
+          </span>
+          <span className="team-rank-card__player-pts">
+            {topPlayer ? `${topPlayer.points} pts` : ''}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TeamRankCard({
   team,
   teamName,
@@ -51,6 +157,8 @@ export default function TeamRankCard({
   rankChange,
   isAdmin,
   stats,
+  draftNotes = null,
+  showMatchup = true,
   blurb,
   onBlurbChange
 }) {
@@ -73,24 +181,7 @@ export default function TeamRankCard({
     opacity: isDragging ? 0.85 : 1
   };
 
-  const isTopScorer = stats?.scoringPlace === 1;
-  const isBottomScorer = stats?.scoringPlace === 12;
-  const medianEmoji = isTopScorer ? ' 🏆' : isBottomScorer ? ' 💩' : '';
-  const medianLine =
-    stats?.medianResult && stats?.scoringPlaceLabel
-      ? `${stats.medianResult} ${stats.scoringPlaceLabel}${medianEmoji}`
-      : '—';
-  const medianClass = [
-    'team-rank-card__median',
-    stats?.medianResult === 'W' ? 'is-up' : '',
-    stats?.medianResult === 'L' ? 'is-down' : '',
-    isTopScorer ? 'is-trophy' : '',
-    isBottomScorer ? 'is-poop' : ''
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  const topPlayer = stats?.topPlayer;
+  const showDraftMiddle = Boolean(draftNotes) && !showMatchup;
 
   return (
     <article
@@ -114,69 +205,26 @@ export default function TeamRankCard({
         <div className="team-rank-card__meta">
           <span className="team-rank-card__owner">{team.owner}</span>
           <span className="team-rank-card__name">{teamName || team.name}</span>
-          <span className="team-rank-card__record">
-            {stats?.recordLabel || '0-0'}
-          </span>
+          {showMatchup && (
+            <span className="team-rank-card__record">
+              {stats?.recordLabel || '0-0'}
+            </span>
+          )}
         </div>
         <div className="team-rank-card__change-wrap">
           <RankChange rankChange={rankChange} />
         </div>
       </div>
 
-      <div className="team-rank-card__middle">
-        <div className="team-rank-card__matchup">
-          <span className="team-rank-card__week-badge">
-            Week {stats?.week || '—'}
-          </span>
-          {stats?.opponentName ? (
-            <p className="team-rank-card__matchup-line">
-              <span
-                className={
-                  stats.result === 'W'
-                    ? 'matchup-result is-win'
-                    : stats.result === 'L'
-                      ? 'matchup-result is-loss'
-                      : 'matchup-result'
-                }
-              >
-                {stats.result}
-              </span>{' '}
-              {stats.points?.toFixed?.(1) ?? stats.points}–
-              {stats.oppPoints?.toFixed?.(1) ?? stats.oppPoints} vs{' '}
-              {stats.opponentOwner || stats.opponentName}
-            </p>
-          ) : (
-            <p className="team-rank-card__matchup-line">No matchup data</p>
-          )}
-          <p className={medianClass}>
-            Median Performance: {medianLine}
-          </p>
-        </div>
-        <div className="team-rank-card__player">
-          <div className="team-rank-card__headshot">
-            {topPlayer?.headshotUrl && !imgFailed ? (
-              <img
-                src={topPlayer.headshotUrl}
-                alt=""
-                onError={() => setImgFailed(true)}
-              />
-            ) : (
-              <span className="team-rank-card__headshot-fallback">
-                {topPlayer?.name?.slice(0, 1) || '?'}
-              </span>
-            )}
-          </div>
-          <div>
-            <span className="team-rank-card__player-label">Top performer</span>
-            <span className="team-rank-card__player-name">
-              {topPlayer?.name || '—'}
-            </span>
-            <span className="team-rank-card__player-pts">
-              {topPlayer ? `${topPlayer.points} pts` : ''}
-            </span>
-          </div>
-        </div>
-      </div>
+      {showDraftMiddle ? (
+        <DraftMiddle draftNotes={draftNotes} />
+      ) : showMatchup ? (
+        <MatchupMiddle
+          stats={stats}
+          imgFailed={imgFailed}
+          setImgFailed={setImgFailed}
+        />
+      ) : null}
 
       <div className="team-rank-card__bottom">
         {isAdmin ? (

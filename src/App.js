@@ -81,6 +81,7 @@ export default function App() {
     blurbs: {},
     names: {}
   };
+  const isDraftRecap = selectedWeek === 0;
   const isDraftWeek =
     isAdmin && draftWeek != null && selectedWeek === draftWeek;
   const teams = useMemo(
@@ -94,10 +95,13 @@ export default function App() {
   );
   const cardStats = useMemo(
     () =>
-      leagueData && allTeams.length && rosterWeek === selectedWeek
+      !isDraftRecap &&
+      leagueData &&
+      allTeams.length &&
+      rosterWeek === selectedWeek
         ? buildTeamCardStats(leagueData, allTeams, selectedWeek, teamNames)
         : null,
-    [leagueData, allTeams, selectedWeek, rosterWeek, teamNames]
+    [isDraftRecap, leagueData, allTeams, selectedWeek, rosterWeek, teamNames]
   );
 
   function snapshotTeamNames(teamList = allTeams) {
@@ -119,9 +123,11 @@ export default function App() {
 
     async function loadLeague() {
       try {
+        const scoringPeriodId =
+          selectedWeek != null && selectedWeek > 0 ? selectedWeek : null;
         const leagueUrl =
-          selectedWeek != null
-            ? `/api/league?scoringPeriodId=${selectedWeek}`
+          scoringPeriodId != null
+            ? `/api/league?scoringPeriodId=${scoringPeriodId}`
             : '/api/league';
 
         const [leagueRes, rankingsRes] = await Promise.all([
@@ -239,13 +245,20 @@ export default function App() {
     setWeeks((prev) => {
       const key = String(week);
       const current = prev[key] || { teamIds: [], blurbs: {}, names: {} };
+      const nextWeek = {
+        teamIds: patch.teamIds ?? current.teamIds,
+        blurbs: patch.blurbs ?? current.blurbs,
+        names: patch.names ?? current.names
+      };
+      if (current.intro) {
+        nextWeek.intro = current.intro;
+      }
+      if (current.draft) {
+        nextWeek.draft = current.draft;
+      }
       const next = {
         ...prev,
-        [key]: {
-          teamIds: patch.teamIds ?? current.teamIds,
-          blurbs: patch.blurbs ?? current.blurbs,
-          names: patch.names ?? current.names
-        }
+        [key]: nextWeek
       };
       weeksRef.current = next;
       return next;
@@ -381,7 +394,7 @@ export default function App() {
             {isAdmin ? (
               <>
                 <p className="admin-panel__status">
-                  Editing week {selectedWeek}
+                  Editing {isDraftRecap ? 'draft recap' : `week ${selectedWeek}`}
                   {isDraftWeek ? ' (unpublished draft)' : ''}
                 </p>
                 {isDraftWeek && (
@@ -421,6 +434,7 @@ export default function App() {
         <nav className="week-nav" aria-label="Power ranking weeks">
           {visibleWeekKeys.map((week) => {
             const isDraft = isAdmin && draftWeek != null && week === draftWeek;
+            const isRecap = week === 0;
             return (
               <button
                 key={week}
@@ -434,7 +448,7 @@ export default function App() {
                   .join(' ')}
                 onClick={() => handleSelectWeek(week)}
               >
-                Week {week}
+                {isRecap ? 'Draft Recap' : `Week ${week}`}
                 {isDraft ? ' (draft)' : ''}
               </button>
             );
@@ -444,6 +458,9 @@ export default function App() {
 
       {loading && <p>Loading league…</p>}
       {error && <p>Error: {error}</p>}
+      {!loading && !error && weekData.intro && (
+        <p className="week-intro">{weekData.intro}</p>
+      )}
       {!loading && !error && (
         <PowerRankingsList
           teams={teams}
@@ -451,9 +468,11 @@ export default function App() {
           onReorder={handleReorder}
           cardStats={cardStats}
           blurbs={weekData.blurbs || {}}
+          draftNotes={weekData.draft || {}}
           teamNames={teamNames}
           onBlurbChange={handleBlurbChange}
           previousTeamIds={previousTeamIds}
+          showMatchup={!isDraftRecap}
         />
       )}
     </div>

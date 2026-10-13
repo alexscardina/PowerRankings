@@ -17,6 +17,40 @@ function asObject(value) {
     : {};
 }
 
+function normalizeDraftNotes(value) {
+  const draft = asObject(value);
+  const next = {};
+  for (const [teamId, notes] of Object.entries(draft)) {
+    if (!notes || typeof notes !== "object" || Array.isArray(notes)) continue;
+    const entry = {};
+    for (const key of ["strengths", "weaknesses", "bestPick", "worstPick"]) {
+      if (typeof notes[key] === "string" && notes[key].trim()) {
+        entry[key] = notes[key].trim();
+      }
+    }
+    if (Object.keys(entry).length) {
+      next[String(teamId)] = entry;
+    }
+  }
+  return next;
+}
+
+function normalizeWeek(value) {
+  const week = {
+    teamIds: Array.isArray(value?.teamIds) ? value.teamIds : [],
+    blurbs: asObject(value?.blurbs),
+    names: asObject(value?.names)
+  };
+  if (typeof value?.intro === "string" && value.intro.trim()) {
+    week.intro = value.intro.trim();
+  }
+  const draft = normalizeDraftNotes(value?.draft);
+  if (Object.keys(draft).length) {
+    week.draft = draft;
+  }
+  return week;
+}
+
 function isNetlifyRuntime() {
   return Boolean(process.env.NETLIFY || process.env.NETLIFY_DEV);
 }
@@ -25,11 +59,7 @@ function normalize(data) {
   if (data && data.weeks && typeof data.weeks === "object") {
     const weeks = {};
     for (const [key, value] of Object.entries(data.weeks)) {
-      weeks[String(key)] = {
-        teamIds: Array.isArray(value?.teamIds) ? value.teamIds : [],
-        blurbs: asObject(value?.blurbs),
-        names: asObject(value?.names)
-      };
+      weeks[String(key)] = normalizeWeek(value);
     }
     const weekNums = Object.keys(weeks)
       .map(Number)
@@ -87,13 +117,27 @@ async function getBlobStore() {
   return getStore("rankings");
 }
 
+function mergeMissingSeedWeeks(stored) {
+  const seed = normalize(SEED_RANKINGS);
+  const weeks = { ...stored.weeks };
+  for (const [key, value] of Object.entries(seed.weeks)) {
+    if (!weeks[key]) {
+      weeks[key] = value;
+    }
+  }
+  return {
+    ...stored,
+    weeks
+  };
+}
+
 async function readRankings() {
   if (isNetlifyRuntime()) {
     try {
       const store = await getBlobStore();
       const data = await store.get(BLOB_KEY, { type: "json" });
       if (data) {
-        return normalize(data);
+        return mergeMissingSeedWeeks(normalize(data));
       }
     } catch (error) {
       console.error("Blob read failed, using seed rankings:", error.message);
@@ -102,7 +146,7 @@ async function readRankings() {
     return normalize(SEED_RANKINGS);
   }
 
-  return readRankingsFromFile();
+  return mergeMissingSeedWeeks(readRankingsFromFile());
 }
 
 function buildNextRankings(current, { week, teamIds, blurbs, names, activeWeek }) {
@@ -136,11 +180,13 @@ function buildNextRankings(current, { week, teamIds, blurbs, names, activeWeek }
 
   const targetWeek = String(week ?? activeWeek ?? current.activeWeek ?? 1);
   const existing = weeks[targetWeek] || emptyWeek();
-  weeks[targetWeek] = {
+  weeks[targetWeek] = normalizeWeek({
     teamIds: Array.isArray(teamIds) ? teamIds : existing.teamIds,
     blurbs: blurbs !== undefined ? asObject(blurbs) : existing.blurbs,
-    names: names !== undefined ? asObject(names) : existing.names
-  };
+    names: names !== undefined ? asObject(names) : existing.names,
+    intro: existing.intro,
+    draft: existing.draft
+  });
 
   return {
     activeWeek:
