@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const RANKINGS_PATH = path.join(__dirname, "..", "data", "rankings.json");
+const BLOB_KEY = "rankings.json";
 
 function emptyWeek() {
   return { teamIds: [], blurbs: {}, names: {} };
@@ -11,6 +12,10 @@ function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
+}
+
+function useBlobs() {
+  return Boolean(process.env.NETLIFY || process.env.NETLIFY_DEV);
 }
 
 function ensureFile() {
@@ -61,15 +66,40 @@ function normalize(data) {
   };
 }
 
-function readRankings() {
+function readRankingsFromFile() {
   ensureFile();
   const raw = fs.readFileSync(RANKINGS_PATH, "utf8");
   return normalize(JSON.parse(raw));
 }
 
-function writeRankings({ week, teamIds, blurbs, names, activeWeek } = {}) {
+function writeRankingsToFile(next) {
   ensureFile();
-  const current = readRankings();
+  fs.writeFileSync(RANKINGS_PATH, JSON.stringify(next, null, 2));
+  return next;
+}
+
+async function getBlobStore() {
+  const { getStore } = require("@netlify/blobs");
+  return getStore("rankings");
+}
+
+async function readRankings() {
+  if (useBlobs()) {
+    try {
+      const store = await getBlobStore();
+      const data = await store.get(BLOB_KEY, { type: "json" });
+      if (data) {
+        return normalize(data);
+      }
+    } catch (error) {
+      console.error("Blob read failed, falling back to file:", error.message);
+    }
+  }
+
+  return readRankingsFromFile();
+}
+
+function buildNextRankings(current, { week, teamIds, blurbs, names, activeWeek }) {
   const weeks = { ...current.weeks };
 
   if (
@@ -106,7 +136,7 @@ function writeRankings({ week, teamIds, blurbs, names, activeWeek } = {}) {
     names: names !== undefined ? asObject(names) : existing.names
   };
 
-  const next = {
+  return {
     activeWeek:
       activeWeek != null
         ? Number(activeWeek)
@@ -115,9 +145,23 @@ function writeRankings({ week, teamIds, blurbs, names, activeWeek } = {}) {
           : Number(targetWeek),
     weeks
   };
+}
 
-  fs.writeFileSync(RANKINGS_PATH, JSON.stringify(next, null, 2));
-  return next;
+async function writeRankings(payload = {}) {
+  const current = await readRankings();
+  const next = buildNextRankings(current, payload);
+
+  if (useBlobs()) {
+    try {
+      const store = await getBlobStore();
+      await store.setJSON(BLOB_KEY, next);
+      return next;
+    } catch (error) {
+      console.error("Blob write failed, falling back to file:", error.message);
+    }
+  }
+
+  return writeRankingsToFile(next);
 }
 
 module.exports = {

@@ -25,16 +25,16 @@ router.get("/league", async (req, res) => {
   }
 });
 
-router.get("/rankings", (req, res) => {
+router.get("/rankings", async (req, res) => {
   try {
-    res.json(readRankings());
+    res.json(await readRankings());
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ error: "Failed to read rankings" });
   }
 });
 
-router.put("/rankings", (req, res) => {
+router.put("/rankings", async (req, res) => {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
 
@@ -72,7 +72,7 @@ router.put("/rankings", (req, res) => {
   }
 
   try {
-    res.json(writeRankings({ week, teamIds, blurbs, names, activeWeek }));
+    res.json(await writeRankings({ week, teamIds, blurbs, names, activeWeek }));
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ error: "Failed to save rankings" });

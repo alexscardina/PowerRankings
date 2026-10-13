@@ -1,0 +1,33 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "nft"
+
+[functions.api]
+  included_files = ["data/rankings.json", "server/**", "router.js"]
+
+[[redirects]]
+  from = "/league"
+  to = "/.netlify/functions/api/league"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/rankings"
+  to = "/.netlify/functions/api/rankings"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/.netlify/functions/api/admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

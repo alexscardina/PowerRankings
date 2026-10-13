@@ -3,5 +3,5 @@ node_modules/
 build/
 .DS_Store
 *.log
-data/rankings.json
+.netlify/
 
