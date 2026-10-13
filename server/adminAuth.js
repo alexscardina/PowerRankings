@@ -1,9 +1,10 @@
 const crypto = require("crypto");
+const { envValue } = require("./env");
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 function getSecret() {
-  return process.env.ADMIN_PASSWORD || "";
+  return envValue("ADMIN_PASSWORD") || "";
 }
 
 function sign(payload) {
@@ -21,7 +22,7 @@ function safeEqual(a, b) {
 }
 
 function login(password) {
-  const expected = process.env.ADMIN_PASSWORD;
+  const expected = envValue("ADMIN_PASSWORD");
   if (!expected || password !== expected) {
     return null;
   }

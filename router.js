@@ -4,14 +4,11 @@ const router = express.Router();
 const { getLeagueData } = require("./server/getLeagueData");
 const { readRankings, writeRankings } = require("./server/rankingsStore");
 const { login, isValidToken } = require("./server/adminAuth");
+const { envValue } = require("./server/env");
 
 router.get("/league", async (req, res) => {
   try {
-    if (
-      !process.env.LEAGUE_ID ||
-      !process.env.ESPN_S2 ||
-      !process.env.ESPN_SWID
-    ) {
+    if (!envValue("LEAGUE_ID") || !envValue("ESPN_S2") || !envValue("ESPN_SWID")) {
       return res.status(500).json({
         error: "Missing LEAGUE_ID, ESPN_S2, or ESPN_SWID environment variables"
       });
