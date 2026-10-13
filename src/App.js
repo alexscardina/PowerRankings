@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import matchTeamOwner from './matchTeamOwner';
 import orderTeams from './orderTeams';
 import buildTeamCardStats, { getCompletedWeek } from './buildTeamCardStats';
-import { availableWeeks, rankDelta } from './rankUtils';
+import { availableWeeks } from './rankUtils';
 import PowerRankingsList from './PowerRankingsList';
 import './App.css';
 
@@ -88,7 +88,10 @@ export default function App() {
     [allTeams, weekData.teamIds]
   );
   const previousTeamIds = weeks[String(selectedWeek - 1)]?.teamIds || [];
-  const teamNames = weekData.names || {};
+  const teamNames = useMemo(
+    () => weekData.names || {},
+    [weekData.names]
+  );
   const cardStats = useMemo(
     () =>
       leagueData && allTeams.length && rosterWeek === selectedWeek
