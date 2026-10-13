@@ -114,7 +114,7 @@ function writeRankingsToFile(next) {
 
 async function getBlobStore() {
   const { getStore } = require("@netlify/blobs");
-  return getStore("rankings");
+  return getStore({ name: "rankings", consistency: "strong" });
 }
 
 function mergeMissingSeedWeeks(stored) {

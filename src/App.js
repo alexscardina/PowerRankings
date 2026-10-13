@@ -238,7 +238,15 @@ export default function App() {
         handleLock();
         throw new Error('Admin session expired. Log in again.');
       }
-      throw new Error('Failed to save rankings');
+      let message = 'Failed to save rankings';
+      try {
+        const body = await res.json();
+        if (body?.error) message = body.error;
+        if (body?.details) message = `${message}: ${body.details}`;
+      } catch {
+        // ignore JSON parse errors
+      }
+      throw new Error(message);
     }
 
     return res.json();

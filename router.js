@@ -95,8 +95,11 @@ router.put("/rankings", async (req, res) => {
       await writeRankings({ week, teamIds, blurbs, names, intro, activeWeek })
     );
   } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: "Failed to save rankings" });
+    console.error("Failed to save rankings:", error);
+    res.status(500).json({
+      error: "Failed to save rankings",
+      details: error.message
+    });
   }
 });
 
