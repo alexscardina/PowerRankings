@@ -120,7 +120,8 @@ function writeRankingsToFile(next) {
 
 async function getBlobStore() {
   const { getStore } = require("@netlify/blobs");
-  return getStore({ name: "rankings", consistency: "strong" });
+  // Default eventual consistency — "strong" needs uncachedEdgeURL site config
+  return getStore("rankings");
 }
 
 function mergeMissingSeedWeeks(stored) {
