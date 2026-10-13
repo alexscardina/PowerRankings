@@ -149,7 +149,10 @@ async function readRankings() {
   return mergeMissingSeedWeeks(readRankingsFromFile());
 }
 
-function buildNextRankings(current, { week, teamIds, blurbs, names, activeWeek }) {
+function buildNextRankings(
+  current,
+  { week, teamIds, blurbs, names, intro, activeWeek }
+) {
   const weeks = { ...current.weeks };
 
   if (
@@ -173,7 +176,8 @@ function buildNextRankings(current, { week, teamIds, blurbs, names, activeWeek }
     activeWeek == null &&
     teamIds === undefined &&
     blurbs === undefined &&
-    names === undefined
+    names === undefined &&
+    intro === undefined
   ) {
     throw new Error("Nothing to save");
   }
@@ -184,7 +188,7 @@ function buildNextRankings(current, { week, teamIds, blurbs, names, activeWeek }
     teamIds: Array.isArray(teamIds) ? teamIds : existing.teamIds,
     blurbs: blurbs !== undefined ? asObject(blurbs) : existing.blurbs,
     names: names !== undefined ? asObject(names) : existing.names,
-    intro: existing.intro,
+    intro: intro !== undefined ? intro : existing.intro,
     draft: existing.draft
   });
 

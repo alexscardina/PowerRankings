@@ -54,9 +54,12 @@ router.put("/rankings", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { week, teamIds, blurbs, names, activeWeek } = req.body || {};
-  if (week !== undefined && (typeof week !== "number" || week < 1)) {
-    return res.status(400).json({ error: "week must be a positive number" });
+  const { week, teamIds, blurbs, names, intro, activeWeek } = req.body || {};
+  if (
+    week !== undefined &&
+    (typeof week !== "number" || !Number.isFinite(week) || week < 0)
+  ) {
+    return res.status(400).json({ error: "week must be a non-negative number" });
   }
   if (teamIds !== undefined && !Array.isArray(teamIds)) {
     return res.status(400).json({ error: "teamIds must be an array" });
@@ -73,18 +76,24 @@ router.put("/rankings", async (req, res) => {
   ) {
     return res.status(400).json({ error: "names must be an object" });
   }
+  if (intro !== undefined && typeof intro !== "string") {
+    return res.status(400).json({ error: "intro must be a string" });
+  }
   if (
     week === undefined &&
     teamIds === undefined &&
     blurbs === undefined &&
     names === undefined &&
+    intro === undefined &&
     activeWeek === undefined
   ) {
     return res.status(400).json({ error: "Nothing to save" });
   }
 
   try {
-    res.json(await writeRankings({ week, teamIds, blurbs, names, activeWeek }));
+    res.json(
+      await writeRankings({ week, teamIds, blurbs, names, intro, activeWeek })
+    );
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ error: "Failed to save rankings" });

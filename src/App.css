@@ -105,6 +105,35 @@ body {
   max-width: 42rem;
 }
 
+.week-intro-edit {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1.5rem;
+  max-width: 42rem;
+}
+
+.week-intro-edit__label {
+  color: var(--muted-on-dark);
+  font-size: 0.9rem;
+}
+
+.week-intro-edit__input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(242, 246, 243, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  font: inherit;
+  line-height: 1.55;
+  resize: vertical;
+  background: rgba(15, 46, 34, 0.45);
+  color: var(--text);
+}
+
+.week-intro-edit__input::placeholder {
+  color: var(--muted-on-dark);
+}
+
 .week-nav__btn {
   border: 1px solid rgba(242, 246, 243, 0.35);
   background: transparent;

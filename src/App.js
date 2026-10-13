@@ -51,11 +51,13 @@ export default function App() {
   const [adminError, setAdminError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const blurbTimer = useRef(null);
+  const introTimer = useRef(null);
   const weeksRef = useRef({});
   const selectedWeekRef = useRef(null);
 
-  const isAdmin = Boolean(adminToken);
-  const showAdminPanel = showAdminGate || isAdmin;
+  // Admin UI/privileges only on ?admin=… — token alone must not unlock the public page
+  const isAdmin = showAdminGate && Boolean(adminToken);
+  const showAdminPanel = showAdminGate;
 
   const weekKeys = useMemo(() => availableWeeks(weeks), [weeks]);
   const draftWeek = activeWeek != null ? activeWeek + 1 : null;
@@ -191,7 +193,7 @@ export default function App() {
           setRosterWeek(selectedWeek);
         }
 
-        if (!localStorage.getItem(ADMIN_TOKEN_KEY)) {
+        if (!(showAdminGate && localStorage.getItem(ADMIN_TOKEN_KEY))) {
           setWeeks(nextWeeks);
         } else {
           setWeeks((prev) => {
@@ -217,6 +219,7 @@ export default function App() {
       cancelled = true;
       clearInterval(id);
       if (blurbTimer.current) clearTimeout(blurbTimer.current);
+      if (introTimer.current) clearTimeout(introTimer.current);
     };
   }, [selectedWeek]);
 
@@ -250,8 +253,10 @@ export default function App() {
         blurbs: patch.blurbs ?? current.blurbs,
         names: patch.names ?? current.names
       };
-      if (current.intro) {
-        nextWeek.intro = current.intro;
+      const nextIntro =
+        patch.intro !== undefined ? patch.intro : current.intro;
+      if (typeof nextIntro === 'string' && nextIntro.trim()) {
+        nextWeek.intro = nextIntro;
       }
       if (current.draft) {
         nextWeek.draft = current.draft;
@@ -338,6 +343,23 @@ export default function App() {
       });
     }
     setSelectedWeek(week);
+  }
+
+  function handleIntroChange(value) {
+    const week = selectedWeekRef.current;
+    updateWeekLocal(week, { intro: value });
+
+    if (introTimer.current) clearTimeout(introTimer.current);
+    introTimer.current = setTimeout(() => {
+      setSaveError(null);
+      const savedIntro = weeksRef.current[String(week)]?.intro;
+      saveRankings({
+        week,
+        intro: typeof savedIntro === 'string' ? savedIntro : value
+      }).catch((err) => {
+        setSaveError(err.message);
+      });
+    }, 500);
   }
 
   function handleBlurbChange(teamId, value) {
@@ -458,7 +480,19 @@ export default function App() {
 
       {loading && <p>Loading league…</p>}
       {error && <p>Error: {error}</p>}
-      {!loading && !error && weekData.intro && (
+      {!loading && !error && isAdmin && (
+        <label className="week-intro-edit">
+          <span className="week-intro-edit__label">Week intro</span>
+          <textarea
+            className="week-intro-edit__input"
+            value={weekData.intro || ''}
+            placeholder="Optional text above this week's rankings…"
+            rows={3}
+            onChange={(e) => handleIntroChange(e.target.value)}
+          />
+        </label>
+      )}
+      {!loading && !error && !isAdmin && weekData.intro && (
         <p className="week-intro">{weekData.intro}</p>
       )}
       {!loading && !error && (
