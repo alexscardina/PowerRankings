@@ -4,26 +4,15 @@
   functions = "netlify/functions"
 
 [functions]
-  node_bundler = "nft"
+  external_node_modules = ["express"]
+  node_bundler = "esbuild"
 
 [functions.api]
   included_files = ["data/rankings.json", "server/**", "router.js"]
 
 [[redirects]]
-  from = "/league"
-  to = "/.netlify/functions/api/league"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/rankings"
-  to = "/.netlify/functions/api/rankings"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/admin/*"
-  to = "/.netlify/functions/api/admin/:splat"
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
   status = 200
   force = true
 

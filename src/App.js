@@ -121,15 +121,25 @@ export default function App() {
       try {
         const leagueUrl =
           selectedWeek != null
-            ? `/league?scoringPeriodId=${selectedWeek}`
-            : '/league';
+            ? `/api/league?scoringPeriodId=${selectedWeek}`
+            : '/api/league';
 
         const [leagueRes, rankingsRes] = await Promise.all([
           fetch(leagueUrl),
-          fetch('/rankings')
+          fetch('/api/rankings')
         ]);
 
-        if (!leagueRes.ok) throw new Error('Failed to load league data');
+        if (!leagueRes.ok) {
+          let message = 'Failed to load league data';
+          try {
+            const body = await leagueRes.json();
+            if (body?.error) message = body.error;
+            if (body?.details) message = `${message}: ${body.details}`;
+          } catch {
+            // ignore JSON parse errors
+          }
+          throw new Error(message);
+        }
         if (!rankingsRes.ok) throw new Error('Failed to load rankings');
 
         const data = await leagueRes.json();
@@ -195,7 +205,7 @@ export default function App() {
   }, [selectedWeek]);
 
   async function saveRankings(payload) {
-    const res = await fetch('/rankings', {
+    const res = await fetch('/api/rankings', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -237,7 +247,7 @@ export default function App() {
     setAdminError(null);
 
     try {
-      const res = await fetch('/admin/login', {
+      const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })

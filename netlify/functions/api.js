@@ -4,6 +4,7 @@ const leagueRouter = require("../../router");
 
 const app = express();
 app.use(express.json());
-app.use(leagueRouter);
+// Netlify rewrites /api/* here and preserves the /api prefix for Express
+app.use("/api", leagueRouter);
 
-module.exports.handler = serverless(app);
+exports.handler = serverless(app);

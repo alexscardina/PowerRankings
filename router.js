@@ -7,6 +7,16 @@ const { login, isValidToken } = require("./server/adminAuth");
 
 router.get("/league", async (req, res) => {
   try {
+    if (
+      !process.env.LEAGUE_ID ||
+      !process.env.ESPN_S2 ||
+      !process.env.ESPN_SWID
+    ) {
+      return res.status(500).json({
+        error: "Missing LEAGUE_ID, ESPN_S2, or ESPN_SWID environment variables"
+      });
+    }
+
     const scoringPeriodId = req.query.scoringPeriodId
       ? Number(req.query.scoringPeriodId)
       : undefined;
@@ -18,9 +28,11 @@ router.get("/league", async (req, res) => {
     );
     res.json(data);
   } catch (error) {
-    console.error(error.response?.data || error.message);
+    const details = error.response?.data || error.message;
+    console.error(details);
     res.status(500).json({
-      error: "Failed to retrieve ESPN league"
+      error: "Failed to retrieve ESPN league",
+      details: typeof details === "string" ? details : JSON.stringify(details)
     });
   }
 });
