@@ -11,7 +11,8 @@
     "start": "concurrently -k \"npm run server\" \"npm run client\"",
     "client": "react-scripts start",
     "server": "nodemon server.js",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "seed:rankings": "node scripts/build-rankings-seed.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
