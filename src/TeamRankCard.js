@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { EDITION_TYPES } from './editionUtils';
 
 function RankChange({ rankChange }) {
   if (rankChange == null) {
@@ -20,7 +21,6 @@ function RankChange({ rankChange }) {
     );
   }
 
-  // Positive = improved toward #1; negative = fell toward #12
   if (rankChange > 0) {
     return (
       <span
@@ -44,31 +44,292 @@ function RankChange({ rankChange }) {
   );
 }
 
-function DraftMiddle({ draftNotes }) {
+function MetaLine({ label, value, tone }) {
+  if (!value) return null;
+  return (
+    <p className="team-rank-card__matchup-line">
+      {label ? (
+        <>
+          <span className={`draft-label${tone ? ` is-${tone}` : ''}`}>
+            {label}
+          </span>{' '}
+        </>
+      ) : null}
+      {value}
+    </p>
+  );
+}
+
+/** Parse optional "Label: W|L rest" archival result lines. */
+function parseLeadingResult(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(.*?:\s*)?(W|L)\b\s*(.*)$/i);
+  if (!match) {
+    return { prefix: '', result: null, rest: trimmed };
+  }
+  return {
+    prefix: match[1] || '',
+    result: match[2].toUpperCase(),
+    rest: (match[3] || '').trim()
+  };
+}
+
+function placeFlags(text) {
+  const sample = String(text || '');
+  return {
+    isTop: /\b1st\b/i.test(sample) || /🏆/.test(sample),
+    isBottom: /\b12th\b/i.test(sample) || /💩/.test(sample)
+  };
+}
+
+function medianClassName(result, rest) {
+  const { isTop, isBottom } = placeFlags(`${result || ''} ${rest || ''}`);
+  return [
+    'team-rank-card__median',
+    result === 'W' ? 'is-up' : '',
+    result === 'L' ? 'is-down' : '',
+    isTop ? 'is-trophy' : '',
+    isBottom ? 'is-poop' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function looksLikeMedianLine(prefix, rest, forceMedian) {
+  if (forceMedian) return true;
+  if (/median/i.test(prefix)) return true;
+  return /^\d+(st|nd|rd|th)\b/i.test(String(rest || ''));
+}
+
+/**
+ * Archival H2H / median / performance lines with 2026 W/L colors
+ * and top/bottom scorer nameplates.
+ */
+function ResultLine({ label, value, forceMedian = false }) {
+  if (!value) return null;
+  const parsed = parseLeadingResult(value);
+  if (!parsed) return null;
+
+  const { prefix, result, rest } = parsed;
+  const leftLabel = [label, prefix].filter(Boolean).join(' ');
+
+  if (!result) {
+    const { isTop, isBottom } = placeFlags(value);
+    if (isTop || isBottom) {
+      return (
+        <p
+          className={[
+            'team-rank-card__median',
+            isTop ? 'is-trophy' : '',
+            isBottom ? 'is-poop' : ''
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {label ? `${label} ` : ''}
+          {value}
+        </p>
+      );
+    }
+    return <MetaLine label={label} value={value} />;
+  }
+
+  if (looksLikeMedianLine(leftLabel, rest, forceMedian)) {
+    return (
+      <p className={medianClassName(result, rest)}>
+        {leftLabel ? `${leftLabel} ` : ''}
+        {result}
+        {rest ? ` ${rest}` : ''}
+      </p>
+    );
+  }
+
+  return (
+    <p className="team-rank-card__matchup-line">
+      {leftLabel ? `${leftLabel} ` : ''}
+      <span
+        className={
+          result === 'W'
+            ? 'matchup-result is-win'
+            : 'matchup-result is-loss'
+        }
+      >
+        {result}
+      </span>
+      {rest ? ` ${rest}` : ''}
+    </p>
+  );
+}
+
+function DraftMiddle({ meta, badge }) {
   return (
     <div className="team-rank-card__middle">
       <div className="team-rank-card__matchup">
-        <span className="team-rank-card__week-badge">Draft Recap</span>
-        <p className="team-rank-card__matchup-line">
-          <span className="draft-label is-strength">Strengths:</span>{' '}
-          {draftNotes?.strengths || '—'}
-        </p>
-        <p className="team-rank-card__matchup-line">
-          <span className="draft-label is-weakness">Weaknesses:</span>{' '}
-          {draftNotes?.weaknesses || '—'}
-        </p>
+        <span className="team-rank-card__week-badge">{badge || 'Draft Recap'}</span>
+        <MetaLine label="Strengths:" value={meta?.strengths} tone="strength" />
+        <MetaLine label="Weaknesses:" value={meta?.weaknesses} tone="weakness" />
       </div>
       <div className="team-rank-card__player team-rank-card__draft-picks">
         <div>
           <span className="team-rank-card__player-label">Best pick</span>
           <span className="team-rank-card__player-name">
-            {draftNotes?.bestPick || '—'}
+            {meta?.bestPick || '—'}
           </span>
           <span className="team-rank-card__player-label">Worst pick</span>
           <span className="team-rank-card__player-name">
-            {draftNotes?.worstPick || '—'}
+            {meta?.worstPick || '—'}
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function parseLetterGrade(grade) {
+  const match = String(grade || '')
+    .trim()
+    .match(/^([A-F])([+-])?/i);
+  if (!match) return null;
+  return {
+    letter: match[1].toUpperCase(),
+    modifier: match[2] || '',
+    display: `${match[1].toUpperCase()}${match[2] || ''}`
+  };
+}
+
+function MidseasonMiddle({ meta }) {
+  const parsedGrade = parseLetterGrade(meta?.grade);
+  const gradeNote = meta?.grade
+    ? String(meta.grade).replace(/^[A-F][+-]?\s*[-–—:]?\s*/i, '').trim()
+    : '';
+
+  return (
+    <div className="team-rank-card__middle is-midseason">
+      <div className="team-rank-card__matchup">
+        <span className="team-rank-card__week-badge">Mid-Season</span>
+        <MetaLine label="H2H:" value={meta?.h2hRecord} />
+        <MetaLine label="Median:" value={meta?.medianRecord} />
+        <ResultLine label="Points:" value={meta?.pointsScored} />
+        {parsedGrade ? (
+          <div
+            className={`team-rank-card__grade is-${parsedGrade.letter.toLowerCase()}`}
+          >
+            <span className="team-rank-card__grade-letter">
+              {parsedGrade.display}
+            </span>
+            {gradeNote ? (
+              <span className="team-rank-card__grade-note">{gradeNote}</span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="team-rank-card__player team-rank-card__draft-picks">
+        <div>
+          <span className="team-rank-card__player-label">Best pick</span>
+          <span className="team-rank-card__player-name">
+            {meta?.bestPick || '—'}
+          </span>
+          <span className="team-rank-card__player-label">Worst pick</span>
+          <span className="team-rank-card__player-name">
+            {meta?.worstPick || '—'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayoffMiddle({ meta }) {
+  const performanceLines = meta?.performanceLines || [];
+  return (
+    <div className="team-rank-card__middle is-single">
+      <div className="team-rank-card__matchup">
+        <span className="team-rank-card__week-badge">Playoff Predictor</span>
+        <MetaLine label="H2H:" value={meta?.h2hRecord} />
+        <MetaLine label="Median:" value={meta?.medianRecord} />
+        <ResultLine label="Points:" value={meta?.pointsScored} />
+        {performanceLines.map((line) => (
+          <ResultLine key={line} value={line} />
+        ))}
+        {meta?.chances ? (
+          <p className="team-rank-card__median">{meta.chances}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function RetrospectiveMiddle({ meta }) {
+  return (
+    <div className="team-rank-card__middle">
+      <div className="team-rank-card__matchup">
+        <span className="team-rank-card__week-badge">Season Retrospective</span>
+        <MetaLine label="Record:" value={meta?.record} />
+        <MetaLine label="Median wins:" value={meta?.medianWins} />
+        <MetaLine label="Playoffs:" value={meta?.playoffPerformance} />
+        <MetaLine label="Draft rank:" value={meta?.draftRecapRanking} />
+        <MetaLine label="Mid-season:" value={meta?.midSeasonRanking} />
+      </div>
+      <div className="team-rank-card__player team-rank-card__draft-picks">
+        <div>
+          <span className="team-rank-card__player-label">Best player</span>
+          <span className="team-rank-card__player-name">
+            {meta?.bestPlayer || '—'}
+          </span>
+          <span className="team-rank-card__player-label">Worst player</span>
+          <span className="team-rank-card__player-name">
+            {meta?.worstPlayer || '—'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArchivalWeekMiddle({ meta, badge }) {
+  const performanceLines = meta?.performanceLines || [];
+  const biWeek =
+    meta?.week9H2H ||
+    meta?.week10H2H ||
+    meta?.week11H2H ||
+    meta?.week12H2H;
+
+  return (
+    <div className="team-rank-card__middle is-single">
+      <div className="team-rank-card__matchup">
+        <span className="team-rank-card__week-badge">{badge || 'Week'}</span>
+        {performanceLines.length ? (
+          <>
+            {performanceLines.map((line) => (
+              <ResultLine key={line} value={line} />
+            ))}
+            <MetaLine label="Playoff chances:" value={meta.playoffChances} />
+          </>
+        ) : biWeek ? (
+          <>
+            <ResultLine value={meta.week9H2H || meta.week11H2H} />
+            <ResultLine
+              value={meta.week9Median || meta.week11Median}
+              forceMedian
+            />
+            <ResultLine value={meta.week10H2H || meta.week12H2H} />
+            <ResultLine
+              value={meta.week10Median || meta.week12Median}
+              forceMedian
+            />
+            <MetaLine label="Playoff chances:" value={meta.playoffChances} />
+          </>
+        ) : (
+          <>
+            <ResultLine value={meta?.lastWeek} />
+            <ResultLine
+              label="Median:"
+              value={meta?.medianPerformance}
+              forceMedian
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -150,6 +411,36 @@ function MatchupMiddle({ stats, imgFailed, setImgFailed }) {
   );
 }
 
+function EditionMiddle({ editionType, editionLabel, meta, stats, live }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (editionType === EDITION_TYPES.draft) {
+    return <DraftMiddle meta={meta} badge={editionLabel} />;
+  }
+  if (editionType === EDITION_TYPES.midseason) {
+    return <MidseasonMiddle meta={meta} />;
+  }
+  if (editionType === EDITION_TYPES.playoff) {
+    return <PlayoffMiddle meta={meta} />;
+  }
+  if (editionType === EDITION_TYPES.retrospective) {
+    return <RetrospectiveMiddle meta={meta} />;
+  }
+  if (live && editionType === EDITION_TYPES.week) {
+    return (
+      <MatchupMiddle
+        stats={stats}
+        imgFailed={imgFailed}
+        setImgFailed={setImgFailed}
+      />
+    );
+  }
+  if (meta && Object.keys(meta).length) {
+    return <ArchivalWeekMiddle meta={meta} badge={editionLabel} />;
+  }
+  return null;
+}
+
 export default function TeamRankCard({
   team,
   teamName,
@@ -157,8 +448,11 @@ export default function TeamRankCard({
   rankChange,
   isAdmin,
   stats,
-  draftNotes = null,
-  showMatchup = true,
+  teamMeta = null,
+  editionType = EDITION_TYPES.week,
+  editionLabel = '',
+  live = true,
+  recordLabel = null,
   blurb,
   onBlurbChange
 }) {
@@ -173,7 +467,6 @@ export default function TeamRankCard({
     id: team.id,
     disabled: !isAdmin
   });
-  const [imgFailed, setImgFailed] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -181,7 +474,10 @@ export default function TeamRankCard({
     opacity: isDragging ? 0.85 : 1
   };
 
-  const showDraftMiddle = Boolean(draftNotes) && !showMatchup;
+  const showRecord =
+    live && editionType === EDITION_TYPES.week
+      ? true
+      : Boolean(recordLabel || teamMeta?.record);
 
   return (
     <article
@@ -205,9 +501,12 @@ export default function TeamRankCard({
         <div className="team-rank-card__meta">
           <span className="team-rank-card__owner">{team.owner}</span>
           <span className="team-rank-card__name">{teamName || team.name}</span>
-          {showMatchup && (
+          {showRecord && (
             <span className="team-rank-card__record">
-              {stats?.recordLabel || '0-0'}
+              {recordLabel ||
+                teamMeta?.record ||
+                stats?.recordLabel ||
+                '0-0'}
             </span>
           )}
         </div>
@@ -216,15 +515,13 @@ export default function TeamRankCard({
         </div>
       </div>
 
-      {showDraftMiddle ? (
-        <DraftMiddle draftNotes={draftNotes} />
-      ) : showMatchup ? (
-        <MatchupMiddle
-          stats={stats}
-          imgFailed={imgFailed}
-          setImgFailed={setImgFailed}
-        />
-      ) : null}
+      <EditionMiddle
+        editionType={editionType}
+        editionLabel={editionLabel}
+        meta={teamMeta}
+        stats={stats}
+        live={live}
+      />
 
       <div className="team-rank-card__bottom">
         {isAdmin ? (

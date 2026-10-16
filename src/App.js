@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import matchTeamOwner from './matchTeamOwner';
 import orderTeams from './orderTeams';
-import buildTeamCardStats, { getCompletedWeek } from './buildTeamCardStats';
-import { availableWeeks } from './rankUtils';
+import buildTeamCardStats from './buildTeamCardStats';
 import PowerRankingsList from './PowerRankingsList';
+import {
+  CREATE_TYPE_OPTIONS,
+  EDITION_TYPES,
+  previousEditionId,
+  scoringPeriodForEdition,
+  seasonStamp,
+  usesEspnMatchup
+} from './editionUtils';
 import './App.css';
 
 const ADMIN_TOKEN_KEY = 'adminToken';
@@ -12,35 +19,38 @@ function hasAdminGate() {
   return new URLSearchParams(window.location.search).has('admin');
 }
 
-function resolveWeeks(rankings, completedWeek) {
-  const weeks = { ...(rankings.weeks || {}) };
+function teamsFromEdition(edition, espnTeams) {
+  if (!edition) return [];
+  const names = edition.names || {};
+  const owners = edition.owners || {};
+  const ids = edition.teamIds || [];
 
-  if (
-    rankings.legacy &&
-    (rankings.legacy.teamIds?.length ||
-      Object.keys(rankings.legacy.blurbs || {}).length ||
-      Object.keys(rankings.legacy.names || {}).length)
-  ) {
-    const key = String(completedWeek);
-    if (!weeks[key]) {
-      weeks[key] = {
-        teamIds: rankings.legacy.teamIds || [],
-        blurbs: rankings.legacy.blurbs || {},
-        names: rankings.legacy.names || {}
-      };
-    }
+  if (espnTeams?.length) {
+    return orderTeams(espnTeams, ids).map((team) => ({
+      ...team,
+      name: names[String(team.id)] || names[team.id] || team.name,
+      owner: owners[String(team.id)] || owners[team.id] || team.owner
+    }));
   }
 
-  return weeks;
+  return ids.map((id) => ({
+    id,
+    name: names[String(id)] || names[id] || String(id),
+    owner: owners[String(id)] || owners[id] || 'Unknown'
+  }));
 }
 
 export default function App() {
-  const [allTeams, setAllTeams] = useState([]);
+  const [espnTeams, setEspnTeams] = useState([]);
   const [leagueData, setLeagueData] = useState(null);
-  const [rosterWeek, setRosterWeek] = useState(null);
-  const [weeks, setWeeks] = useState({});
-  const [activeWeek, setActiveWeek] = useState(null);
-  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [rosterEditionId, setRosterEditionId] = useState(null);
+  const [yearList, setYearList] = useState([]);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [live, setLive] = useState(true);
+  const [editions, setEditions] = useState([]);
+  const [activeEditionId, setActiveEditionId] = useState(null);
+  const [selectedEditionId, setSelectedEditionId] = useState(null);
+  const [showTypePicker, setShowTypePicker] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [adminToken, setAdminToken] = useState(
@@ -52,102 +62,95 @@ export default function App() {
   const [saveError, setSaveError] = useState(null);
   const blurbTimer = useRef(null);
   const introTimer = useRef(null);
-  const weeksRef = useRef({});
-  const selectedWeekRef = useRef(null);
+  const editionsRef = useRef([]);
+  const selectedEditionRef = useRef(null);
 
-  // Admin UI/privileges only on ?admin=… — token alone must not unlock the public page
   const isAdmin = showAdminGate && Boolean(adminToken);
   const showAdminPanel = showAdminGate;
 
-  const weekKeys = useMemo(() => availableWeeks(weeks), [weeks]);
-  const draftWeek = activeWeek != null ? activeWeek + 1 : null;
-  const visibleWeekKeys = useMemo(() => {
-    const released =
-      activeWeek == null
-        ? weekKeys
-        : weekKeys.filter((week) => week <= activeWeek);
+  const selectedEdition = useMemo(
+    () => editions.find((e) => e.id === selectedEditionId) || null,
+    [editions, selectedEditionId]
+  );
 
-    if (!isAdmin || draftWeek == null) {
-      return released;
+  const activeOrder = useMemo(() => {
+    const active = editions.find((e) => e.id === activeEditionId);
+    return active?.order ?? -1;
+  }, [editions, activeEditionId]);
+
+  const visibleEditions = useMemo(() => {
+    if (isAdmin) {
+      return [...editions].sort((a, b) => a.order - b.order);
     }
+    return editions
+      .filter((e) => e.order <= activeOrder)
+      .sort((a, b) => a.order - b.order);
+  }, [editions, activeOrder, isAdmin]);
 
-    if (released.includes(draftWeek)) {
-      return released;
-    }
+  const isUnpublished =
+    isAdmin &&
+    selectedEdition != null &&
+    selectedEdition.order > activeOrder;
 
-    return [...released, draftWeek].sort((a, b) => a - b);
-  }, [weekKeys, activeWeek, isAdmin, draftWeek]);
-
-  const weekData = weeks[String(selectedWeek)] || {
-    teamIds: [],
-    blurbs: {},
-    names: {}
-  };
-  const isDraftRecap = selectedWeek === 0;
-  const isDraftWeek =
-    isAdmin && draftWeek != null && selectedWeek === draftWeek;
   const teams = useMemo(
-    () => orderTeams(allTeams, weekData.teamIds || []),
-    [allTeams, weekData.teamIds]
-  );
-  const previousTeamIds = weeks[String(selectedWeek - 1)]?.teamIds || [];
-  const teamNames = useMemo(
-    () => weekData.names || {},
-    [weekData.names]
-  );
-  const cardStats = useMemo(
-    () =>
-      !isDraftRecap &&
-      leagueData &&
-      allTeams.length &&
-      rosterWeek === selectedWeek
-        ? buildTeamCardStats(leagueData, allTeams, selectedWeek, teamNames)
-        : null,
-    [isDraftRecap, leagueData, allTeams, selectedWeek, rosterWeek, teamNames]
+    () => teamsFromEdition(selectedEdition, live ? espnTeams : null),
+    [selectedEdition, live, espnTeams]
   );
 
-  function snapshotTeamNames(teamList = allTeams) {
+  const prevId = previousEditionId(editions, selectedEditionId);
+  const previousTeamIds =
+    editions.find((e) => e.id === prevId)?.teamIds || [];
+
+  const teamNames = useMemo(
+    () => selectedEdition?.names || {},
+    [selectedEdition]
+  );
+  const blurbs = selectedEdition?.blurbs || {};
+  const teamMeta = selectedEdition?.meta || {};
+
+  const cardStats = useMemo(() => {
+    if (
+      !usesEspnMatchup(selectedEdition, live) ||
+      !leagueData ||
+      !espnTeams.length ||
+      rosterEditionId !== selectedEditionId
+    ) {
+      return null;
+    }
+    const week = scoringPeriodForEdition(selectedEdition);
+    return buildTeamCardStats(leagueData, espnTeams, week, teamNames);
+  }, [
+    selectedEdition,
+    live,
+    leagueData,
+    espnTeams,
+    rosterEditionId,
+    selectedEditionId,
+    teamNames
+  ]);
+
+  function snapshotTeamNames(teamList = espnTeams) {
     return Object.fromEntries(
       teamList.map((team) => [String(team.id), team.name])
     );
   }
 
   useEffect(() => {
-    weeksRef.current = weeks;
-  }, [weeks]);
+    editionsRef.current = editions;
+  }, [editions]);
 
   useEffect(() => {
-    selectedWeekRef.current = selectedWeek;
-  }, [selectedWeek]);
+    selectedEditionRef.current = selectedEditionId;
+  }, [selectedEditionId]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLeague() {
+    async function load() {
       try {
-        const scoringPeriodId =
-          selectedWeek != null && selectedWeek > 0 ? selectedWeek : null;
-        const leagueUrl =
-          scoringPeriodId != null
-            ? `/api/league?scoringPeriodId=${scoringPeriodId}`
-            : '/api/league';
-
-        const [leagueRes, rankingsRes] = await Promise.all([
-          fetch(leagueUrl),
-          fetch('/api/rankings')
-        ]);
-
-        if (!leagueRes.ok) {
-          let message = 'Failed to load league data';
-          try {
-            const body = await leagueRes.json();
-            if (body?.error) message = body.error;
-            if (body?.details) message = `${message}: ${body.details}`;
-          } catch {
-            // ignore JSON parse errors
-          }
-          throw new Error(message);
-        }
+        const yearQuery =
+          selectedYear != null ? `?year=${selectedYear}` : '';
+        const rankingsRes = await fetch(`/api/rankings${yearQuery}`);
         if (!rankingsRes.ok) {
           let message = 'Failed to load rankings';
           try {
@@ -155,55 +158,67 @@ export default function App() {
             if (body?.error) message = body.error;
             if (body?.details) message = `${message}: ${body.details}`;
           } catch {
-            // ignore JSON parse errors
+            // ignore
           }
           throw new Error(message);
         }
 
-        const data = await leagueRes.json();
         const rankings = await rankingsRes.json();
         if (cancelled) return;
 
-        const members = (data.members || []).map((member) => ({
-          id: member.id,
-          firstName: member.firstName,
-          lastName: member.lastName
-        }));
-        const mapped = matchTeamOwner(data.teams || [], members);
-        const completedWeek = getCompletedWeek(data);
-        const nextWeeks = resolveWeeks(rankings, completedWeek);
-        const keys = availableWeeks(nextWeeks);
-        const initialWeek =
-          rankings.activeWeek && nextWeeks[String(rankings.activeWeek)]
-            ? rankings.activeWeek
-            : keys.length
-              ? keys[keys.length - 1]
-              : completedWeek;
+        const year = rankings.year;
+        const isLive = Boolean(rankings.live);
+        const nextEditions = rankings.editions || [];
+        const activeId = rankings.activeEditionId;
+        setYearList(rankings.years || []);
+        setSelectedYear(year);
+        setLive(isLive);
+        setActiveEditionId(activeId);
+        setEditions(nextEditions);
+        editionsRef.current = nextEditions;
 
-        if (!nextWeeks[String(initialWeek)]) {
-          nextWeeks[String(initialWeek)] = { teamIds: [], blurbs: {} };
-        }
+        setSelectedEditionId((prev) => {
+          if (prev && nextEditions.some((e) => e.id === prev)) return prev;
+          return activeId || nextEditions[nextEditions.length - 1]?.id || null;
+        });
 
-        setLeagueData(data);
-        setAllTeams(mapped);
-        setActiveWeek(
-          rankings.activeWeek != null ? Number(rankings.activeWeek) : initialWeek
-        );
-        if (selectedWeek != null) {
-          setRosterWeek(selectedWeek);
-        }
-
-        if (!(showAdminGate && localStorage.getItem(ADMIN_TOKEN_KEY))) {
-          setWeeks(nextWeeks);
+        if (isLive) {
+          const edition =
+            nextEditions.find((e) => e.id === (selectedEditionRef.current || activeId)) ||
+            nextEditions.find((e) => e.id === activeId);
+          const scoringPeriodId = scoringPeriodForEdition(edition);
+          const leagueUrl =
+            scoringPeriodId != null
+              ? `/api/league?scoringPeriodId=${scoringPeriodId}`
+              : '/api/league';
+          const leagueRes = await fetch(leagueUrl);
+          if (!leagueRes.ok) {
+            let message = 'Failed to load league data';
+            try {
+              const body = await leagueRes.json();
+              if (body?.error) message = body.error;
+              if (body?.details) message = `${message}: ${body.details}`;
+            } catch {
+              // ignore
+            }
+            throw new Error(message);
+          }
+          const data = await leagueRes.json();
+          if (cancelled) return;
+          const members = (data.members || []).map((member) => ({
+            id: member.id,
+            firstName: member.firstName,
+            lastName: member.lastName
+          }));
+          setLeagueData(data);
+          setEspnTeams(matchTeamOwner(data.teams || [], members));
+          setRosterEditionId(edition?.id || activeId);
         } else {
-          setWeeks((prev) => {
-            const next = Object.keys(prev).length ? prev : nextWeeks;
-            weeksRef.current = next;
-            return next;
-          });
+          setLeagueData(null);
+          setEspnTeams([]);
+          setRosterEditionId(null);
         }
 
-        setSelectedWeek((prev) => prev ?? initialWeek);
         setError(null);
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -212,16 +227,15 @@ export default function App() {
       }
     }
 
-    loadLeague();
-    const id = setInterval(loadLeague, 60_000);
-
+    load();
+    const id = setInterval(load, 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
       if (blurbTimer.current) clearTimeout(blurbTimer.current);
       if (introTimer.current) clearTimeout(introTimer.current);
     };
-  }, [selectedWeek, showAdminGate]);
+  }, [selectedYear, selectedEditionId, showAdminGate]);
 
   async function saveRankings(payload) {
     const res = await fetch('/api/rankings', {
@@ -230,7 +244,7 @@ export default function App() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ year: selectedYear, ...payload })
     });
 
     if (!res.ok) {
@@ -244,36 +258,38 @@ export default function App() {
         if (body?.error) message = body.error;
         if (body?.details) message = `${message}: ${body.details}`;
       } catch {
-        // ignore JSON parse errors
+        // ignore
       }
       throw new Error(message);
     }
 
-    return res.json();
+    const data = await res.json();
+    setEditions(data.editions || []);
+    editionsRef.current = data.editions || [];
+    setActiveEditionId(data.activeEditionId);
+    setLive(Boolean(data.live));
+    setYearList(data.years || []);
+    return data;
   }
 
-  function updateWeekLocal(week, patch) {
-    setWeeks((prev) => {
-      const key = String(week);
-      const current = prev[key] || { teamIds: [], blurbs: {}, names: {} };
-      const nextWeek = {
-        teamIds: patch.teamIds ?? current.teamIds,
-        blurbs: patch.blurbs ?? current.blurbs,
-        names: patch.names ?? current.names
-      };
-      const nextIntro =
-        patch.intro !== undefined ? patch.intro : current.intro;
-      if (typeof nextIntro === 'string' && nextIntro.trim()) {
-        nextWeek.intro = nextIntro;
-      }
-      if (current.draft) {
-        nextWeek.draft = current.draft;
-      }
-      const next = {
-        ...prev,
-        [key]: nextWeek
-      };
-      weeksRef.current = next;
+  function updateEditionLocal(editionId, patch) {
+    setEditions((prev) => {
+      const next = prev.map((edition) => {
+        if (edition.id !== editionId) return edition;
+        const updated = {
+          ...edition,
+          teamIds: patch.teamIds ?? edition.teamIds,
+          blurbs: patch.blurbs ?? edition.blurbs,
+          names: patch.names ?? edition.names,
+          owners: patch.owners ?? edition.owners,
+          meta: patch.meta ?? edition.meta
+        };
+        if (patch.intro !== undefined) {
+          updated.intro = patch.intro;
+        }
+        return updated;
+      });
+      editionsRef.current = next;
       return next;
     });
   }
@@ -281,18 +297,13 @@ export default function App() {
   async function handleLogin(event) {
     event.preventDefault();
     setAdminError(null);
-
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
       });
-
-      if (!res.ok) {
-        throw new Error('Invalid password');
-      }
-
+      if (!res.ok) throw new Error('Invalid password');
       const data = await res.json();
       localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
       setAdminToken(data.token);
@@ -307,22 +318,19 @@ export default function App() {
     setAdminToken('');
     setAdminError(null);
     setSaveError(null);
-    if (draftWeek != null && selectedWeek === draftWeek && activeWeek != null) {
-      setSelectedWeek(activeWeek);
-    }
+    setShowTypePicker(false);
+    if (activeEditionId) setSelectedEditionId(activeEditionId);
   }
 
   async function handleReorder(nextTeams) {
-    const week = selectedWeekRef.current;
+    const editionId = selectedEditionRef.current;
     const teamIds = nextTeams.map((team) => team.id);
-    updateWeekLocal(week, { teamIds });
+    updateEditionLocal(editionId, { teamIds });
     setSaveError(null);
-
     try {
-      // Don't auto-release draft weeks to the public
-      const payload = { week, teamIds };
-      if (activeWeek != null && week <= activeWeek) {
-        payload.activeWeek = activeWeek;
+      const payload = { editionId, teamIds };
+      if (activeEditionId && editionId === activeEditionId) {
+        payload.activeEditionId = activeEditionId;
       }
       await saveRankings(payload);
     } catch (err) {
@@ -330,106 +338,144 @@ export default function App() {
     }
   }
 
-  function handleSelectWeek(week) {
-    if (
-      isAdmin &&
-      draftWeek != null &&
-      week === draftWeek &&
-      !weeksRef.current[String(week)]
-    ) {
-      const prev = weeksRef.current[String(activeWeek)] || {
-        teamIds: allTeams.map((team) => team.id),
-        blurbs: {},
-        names: {}
-      };
-      updateWeekLocal(week, {
-        teamIds: prev.teamIds?.length
-          ? prev.teamIds
-          : allTeams.map((team) => team.id),
-        blurbs: {},
-        names: snapshotTeamNames()
-      });
-    }
-    setSelectedWeek(week);
+  function handleSelectEdition(editionId) {
+    setSelectedEditionId(editionId);
+    setShowTypePicker(false);
   }
 
   function handleIntroChange(value) {
-    const week = selectedWeekRef.current;
-    updateWeekLocal(week, { intro: value });
-
+    const editionId = selectedEditionRef.current;
+    updateEditionLocal(editionId, { intro: value });
     if (introTimer.current) clearTimeout(introTimer.current);
     introTimer.current = setTimeout(() => {
       setSaveError(null);
-      const savedIntro = weeksRef.current[String(week)]?.intro;
+      const edition = editionsRef.current.find((e) => e.id === editionId);
       saveRankings({
-        week,
-        intro: typeof savedIntro === 'string' ? savedIntro : value
-      }).catch((err) => {
-        setSaveError(err.message);
-      });
+        editionId,
+        intro: typeof edition?.intro === 'string' ? edition.intro : value
+      }).catch((err) => setSaveError(err.message));
     }, 500);
   }
 
   function handleBlurbChange(teamId, value) {
-    const week = selectedWeekRef.current;
-    const key = String(week);
-    const current = weeksRef.current[key] || { teamIds: [], blurbs: {} };
-    const blurbs = { ...current.blurbs, [String(teamId)]: value };
-    updateWeekLocal(week, { blurbs });
-
+    const editionId = selectedEditionRef.current;
+    const edition = editionsRef.current.find((e) => e.id === editionId) || {
+      blurbs: {}
+    };
+    const nextBlurbs = { ...edition.blurbs, [String(teamId)]: value };
+    updateEditionLocal(editionId, { blurbs: nextBlurbs });
     if (blurbTimer.current) clearTimeout(blurbTimer.current);
     blurbTimer.current = setTimeout(() => {
       setSaveError(null);
+      const latest = editionsRef.current.find((e) => e.id === editionId);
       saveRankings({
-        week,
-        blurbs: weeksRef.current[key]?.blurbs || blurbs
-      }).catch((err) => {
-        setSaveError(err.message);
-      });
+        editionId,
+        blurbs: latest?.blurbs || nextBlurbs
+      }).catch((err) => setSaveError(err.message));
     }, 500);
   }
 
-  async function handleReleaseWeek() {
-    if (selectedWeek == null) return;
-    const key = String(selectedWeek);
-    const names = snapshotTeamNames();
-    const current = weeksRef.current[key] || {
-      teamIds: teams.map((team) => team.id),
-      blurbs: {},
-      names: {}
-    };
-    updateWeekLocal(selectedWeek, { names });
+  async function handleCreateEdition(type) {
     setSaveError(null);
-
+    setShowTypePicker(false);
     try {
-      await saveRankings({
-        week: selectedWeek,
-        teamIds: current.teamIds,
-        blurbs: current.blurbs,
-        names,
-        activeWeek: selectedWeek
+      const active = editionsRef.current.find((e) => e.id === activeEditionId);
+      const data = await saveRankings({
+        create: true,
+        type,
+        teamIds: active?.teamIds?.length
+          ? active.teamIds
+          : espnTeams.map((t) => t.id),
+        names: live ? snapshotTeamNames() : active?.names || {},
+        owners: active?.owners || {},
+        blurbs: {}
       });
-      setActiveWeek(selectedWeek);
+      const created = [...(data.editions || [])].sort(
+        (a, b) => b.order - a.order
+      )[0];
+      if (created) {
+        setSelectedEditionId(created.id);
+      }
     } catch (err) {
       setSaveError(err.message);
     }
   }
 
+  async function handleReleaseEdition() {
+    if (!selectedEditionId) return;
+    const edition = editionsRef.current.find((e) => e.id === selectedEditionId);
+    if (!edition) return;
+    setSaveError(null);
+    try {
+      const names = live
+        ? { ...edition.names, ...snapshotTeamNames() }
+        : edition.names || {};
+      await saveRankings({
+        editionId: selectedEditionId,
+        teamIds: edition.teamIds,
+        blurbs: edition.blurbs,
+        names,
+        owners: edition.owners,
+        intro: edition.intro || '',
+        activeEditionId: selectedEditionId
+      });
+      setActiveEditionId(selectedEditionId);
+    } catch (err) {
+      setSaveError(err.message);
+    }
+  }
+
+  function handleYearChange(year) {
+    setLoading(true);
+    setShowTypePicker(false);
+    setSelectedEditionId(null);
+    setSelectedYear(year);
+  }
+
   return (
     <div className="app">
       <header className="app__header">
-        <h1>Lakewood Legends Power Rankings</h1>
+        <div className="app__title-block">
+          <h1>Lakewood Legends Power Rankings</h1>
+          {yearList.length > 0 && (
+            <div className="season-stamp" role="group" aria-label="Season">
+              {yearList.map((entry) => (
+                <button
+                  key={entry.year}
+                  type="button"
+                  className={[
+                    'season-stamp__btn',
+                    entry.year === selectedYear ? 'is-active' : ''
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => handleYearChange(entry.year)}
+                >
+                  {entry.label || seasonStamp(entry.year)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {showAdminPanel && (
           <div className="admin-panel">
             {isAdmin ? (
               <>
                 <p className="admin-panel__status">
-                  Editing {isDraftRecap ? 'draft recap' : `week ${selectedWeek}`}
-                  {isDraftWeek ? ' (unpublished draft)' : ''}
+                  Editing {selectedEdition?.label || 'edition'}
+                  {isUnpublished ? ' (unpublished)' : ''}
                 </p>
-                {isDraftWeek && (
-                  <button type="button" onClick={handleReleaseWeek}>
-                    Release week
+                {live && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTypePicker((v) => !v)}
+                  >
+                    New edition
+                  </button>
+                )}
+                {isUnpublished && (
+                  <button type="button" onClick={handleReleaseEdition}>
+                    Release
                   </button>
                 )}
                 <button type="button" className="secondary" onClick={handleLock}>
@@ -451,34 +497,54 @@ export default function App() {
               )
             )}
             {adminError && (
-              <p className="admin-panel__status admin-panel__error">{adminError}</p>
+              <p className="admin-panel__status admin-panel__error">
+                {adminError}
+              </p>
             )}
             {saveError && (
-              <p className="admin-panel__status admin-panel__error">{saveError}</p>
+              <p className="admin-panel__status admin-panel__error">
+                {saveError}
+              </p>
             )}
           </div>
         )}
       </header>
 
+      {isAdmin && showTypePicker && (
+        <div className="edition-type-picker" role="dialog" aria-label="New edition type">
+          <p className="edition-type-picker__label">Create next rankings as:</p>
+          <div className="edition-type-picker__options">
+            {CREATE_TYPE_OPTIONS.map((option) => (
+              <button
+                key={option.type}
+                type="button"
+                onClick={() => handleCreateEdition(option.type)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!loading && !error && (
-        <nav className="week-nav" aria-label="Power ranking weeks">
-          {visibleWeekKeys.map((week) => {
-            const isDraft = isAdmin && draftWeek != null && week === draftWeek;
-            const isRecap = week === 0;
+        <nav className="week-nav" aria-label="Power ranking editions">
+          {visibleEditions.map((edition) => {
+            const isDraft = isAdmin && edition.order > activeOrder;
             return (
               <button
-                key={week}
+                key={edition.id}
                 type="button"
                 className={[
                   'week-nav__btn',
-                  week === selectedWeek ? 'is-active' : '',
+                  edition.id === selectedEditionId ? 'is-active' : '',
                   isDraft ? 'is-draft' : ''
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                onClick={() => handleSelectWeek(week)}
+                onClick={() => handleSelectEdition(edition.id)}
               >
-                {isRecap ? 'Draft Recap' : `Week ${week}`}
+                {edition.label}
                 {isDraft ? ' (draft)' : ''}
               </button>
             );
@@ -486,35 +552,37 @@ export default function App() {
         </nav>
       )}
 
-      {loading && <p>Loading league…</p>}
+      {loading && <p>Loading…</p>}
       {error && <p>Error: {error}</p>}
       {!loading && !error && isAdmin && (
         <label className="week-intro-edit">
-          <span className="week-intro-edit__label">Week intro</span>
+          <span className="week-intro-edit__label">Edition intro</span>
           <textarea
             className="week-intro-edit__input"
-            value={weekData.intro || ''}
-            placeholder="Optional text above this week's rankings…"
+            value={selectedEdition?.intro || ''}
+            placeholder="Optional text above this edition’s rankings…"
             rows={3}
             onChange={(e) => handleIntroChange(e.target.value)}
           />
         </label>
       )}
-      {!loading && !error && !isAdmin && weekData.intro && (
-        <p className="week-intro">{weekData.intro}</p>
+      {!loading && !error && !isAdmin && selectedEdition?.intro && (
+        <p className="week-intro">{selectedEdition.intro}</p>
       )}
-      {!loading && !error && (
+      {!loading && !error && selectedEdition && (
         <PowerRankingsList
           teams={teams}
           isAdmin={isAdmin}
           onReorder={handleReorder}
           cardStats={cardStats}
-          blurbs={weekData.blurbs || {}}
-          draftNotes={weekData.draft || {}}
+          blurbs={blurbs}
+          teamMeta={teamMeta}
           teamNames={teamNames}
           onBlurbChange={handleBlurbChange}
           previousTeamIds={previousTeamIds}
-          showMatchup={!isDraftRecap}
+          editionType={selectedEdition.type || EDITION_TYPES.week}
+          editionLabel={selectedEdition.label || ''}
+          live={live}
         />
       )}
     </div>

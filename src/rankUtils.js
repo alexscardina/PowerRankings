@@ -2,10 +2,14 @@ export function powerRankForIndex(index, listLength) {
   return listLength - index;
 }
 
+function teamKey(id) {
+  return String(id);
+}
+
 export function ranksFromTeamIds(teamIds, listLength) {
   const ranks = new Map();
   (teamIds || []).forEach((id, index) => {
-    ranks.set(Number(id), powerRankForIndex(index, listLength));
+    ranks.set(teamKey(id), powerRankForIndex(index, listLength));
   });
   return ranks;
 }
@@ -17,8 +21,9 @@ export function rankDelta(teamId, currentTeamIds, previousTeamIds) {
   const listLength = currentTeamIds.length;
   const currentRanks = ranksFromTeamIds(currentTeamIds, listLength);
   const previousRanks = ranksFromTeamIds(previousTeamIds, previousTeamIds.length);
-  const current = currentRanks.get(Number(teamId));
-  const previous = previousRanks.get(Number(teamId));
+  const key = teamKey(teamId);
+  const current = currentRanks.get(key);
+  const previous = previousRanks.get(key);
 
   if (current == null || previous == null) return null;
   return previous - current;

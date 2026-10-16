@@ -34,11 +34,89 @@ body {
   margin-bottom: 1.75rem;
 }
 
+.app__title-block {
+  display: grid;
+  gap: 0.75rem;
+  min-width: min(100%, 20rem);
+}
+
 .app h1 {
   margin: 0;
   font-size: clamp(1.75rem, 4vw, 2.4rem);
   letter-spacing: -0.02em;
   line-height: 1.15;
+}
+
+.season-stamp {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.2rem;
+  border: 1px solid rgba(242, 246, 243, 0.28);
+  border-radius: 0.55rem;
+  background: rgba(11, 36, 26, 0.45);
+  width: fit-content;
+}
+
+.season-stamp__btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted-on-dark);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.season-stamp__btn:hover {
+  color: var(--text);
+  background: rgba(242, 246, 243, 0.08);
+}
+
+.season-stamp__btn.is-active {
+  background: var(--text);
+  color: var(--ink);
+}
+
+.edition-type-picker {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(242, 246, 243, 0.28);
+  border-radius: 0.65rem;
+  background: rgba(11, 36, 26, 0.5);
+}
+
+.edition-type-picker__label {
+  margin: 0 0 0.65rem;
+  color: var(--muted-on-dark);
+}
+
+.edition-type-picker__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.edition-type-picker__options button {
+  border: 1px solid rgba(242, 246, 243, 0.4);
+  background: transparent;
+  color: var(--text);
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.edition-type-picker__options button:hover {
+  background: rgba(242, 246, 243, 0.12);
+}
+
+.team-rank-card__middle.is-single {
+  grid-template-columns: 1fr;
 }
 
 .admin-panel {
@@ -303,9 +381,10 @@ body {
 
 .team-rank-card__middle {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 1rem;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(13.5rem, 34%));
+  column-gap: 1.75rem;
+  row-gap: 1rem;
+  align-items: start;
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--line);
   background: rgba(15, 46, 34, 0.04);
@@ -315,6 +394,7 @@ body {
   display: grid;
   gap: 0.4rem;
   min-width: 0;
+  padding-right: 0.25rem;
 }
 
 .team-rank-card__week-badge {
@@ -387,17 +467,86 @@ body {
   box-shadow: 0 0 0 1px rgba(101, 67, 33, 0.35);
 }
 
+.team-rank-card__middle.is-midseason {
+  align-items: stretch;
+}
+
+.team-rank-card__grade {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin-top: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.55rem;
+  border: 2px solid currentColor;
+  background: rgba(255, 255, 255, 0.55);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.team-rank-card__grade-letter {
+  font-size: clamp(1.85rem, 4vw, 2.45rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.team-rank-card__grade-note {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.team-rank-card__grade.is-f {
+  color: #7a1212;
+  background: rgba(122, 18, 18, 0.1);
+  border-color: #7a1212;
+}
+
+.team-rank-card__grade.is-d {
+  color: #c62828;
+  background: rgba(198, 40, 40, 0.1);
+  border-color: #c62828;
+}
+
+.team-rank-card__grade.is-c {
+  color: #c45c12;
+  background: rgba(196, 92, 18, 0.1);
+  border-color: #c45c12;
+}
+
+.team-rank-card__grade.is-b {
+  color: #1f6b4a;
+  background: rgba(31, 107, 74, 0.1);
+  border-color: #1f6b4a;
+}
+
+.team-rank-card__grade.is-a {
+  color: #8a6a00;
+  background: rgba(212, 175, 55, 0.16);
+  border-color: #d4af37;
+}
+
 .team-rank-card__player {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.75rem;
   align-items: center;
-  min-width: 11rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .team-rank-card__draft-picks {
-  grid-template-columns: 1fr;
-  min-width: 12rem;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+  text-align: right;
+}
+
+.team-rank-card__draft-picks > div {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .team-rank-card__draft-picks .team-rank-card__player-label:not(:first-child) {
@@ -450,6 +599,9 @@ body {
   display: block;
   font-weight: 700;
   font-size: 0.98rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .team-rank-card__bottom {
@@ -479,5 +631,10 @@ body {
 @media (max-width: 640px) {
   .team-rank-card__middle {
     grid-template-columns: 1fr;
+  }
+
+  .team-rank-card__grade {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
 }

@@ -2,9 +2,17 @@ const express = require("express");
 const router = express.Router();
 
 const { getLeagueData } = require("./server/getLeagueData");
-const { readRankings, writeRankings } = require("./server/rankingsStore");
+const {
+  readRankings,
+  writeRankings,
+  listYears,
+  getYearBucket
+} = require("./server/rankingsStore");
 const { login, isValidToken } = require("./server/adminAuth");
 const { envValue } = require("./server/env");
+const { sortedEditionEntries } = require("./server/editionUtils");
+
+const LIVE_SEASON = 2026;
 
 router.get("/league", async (req, res) => {
   try {
@@ -19,7 +27,7 @@ router.get("/league", async (req, res) => {
       : undefined;
 
     const data = await getLeagueData(
-      2026,
+      LIVE_SEASON,
       ["mTeam", "mRoster", "mMatchupScore", "mSettings"],
       Number.isFinite(scoringPeriodId) ? scoringPeriodId : undefined
     );
@@ -34,9 +42,44 @@ router.get("/league", async (req, res) => {
   }
 });
 
+router.get("/rankings/years", async (req, res) => {
+  try {
+    const data = await readRankings();
+    res.json({
+      currentYear: data.currentYear,
+      years: listYears(data)
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({
+      error: "Failed to list ranking years",
+      details: error.message
+    });
+  }
+});
+
 router.get("/rankings", async (req, res) => {
   try {
-    res.json(await readRankings());
+    const data = await readRankings();
+    const year = req.query.year ? Number(req.query.year) : data.currentYear;
+    const bucket = getYearBucket(data, year);
+    if (!bucket) {
+      return res.status(404).json({ error: `No rankings for year ${year}` });
+    }
+
+    const editions = sortedEditionEntries(bucket.editions).map(([id, edition]) => ({
+      id,
+      ...edition
+    }));
+
+    res.json({
+      currentYear: data.currentYear,
+      year,
+      live: bucket.live,
+      activeEditionId: bucket.activeEditionId,
+      editions,
+      years: listYears(data)
+    });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({
@@ -54,12 +97,24 @@ router.put("/rankings", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { week, teamIds, blurbs, names, intro, activeWeek } = req.body || {};
-  if (
-    week !== undefined &&
-    (typeof week !== "number" || !Number.isFinite(week) || week < 0)
-  ) {
-    return res.status(400).json({ error: "week must be a non-negative number" });
+  const {
+    year,
+    editionId,
+    type,
+    create,
+    teamIds,
+    blurbs,
+    names,
+    owners,
+    meta,
+    intro,
+    label,
+    week,
+    activeEditionId
+  } = req.body || {};
+
+  if (year !== undefined && (typeof year !== "number" || !Number.isFinite(year))) {
+    return res.status(400).json({ error: "year must be a number" });
   }
   if (teamIds !== undefined && !Array.isArray(teamIds)) {
     return res.status(400).json({ error: "teamIds must be an array" });
@@ -80,20 +135,52 @@ router.put("/rankings", async (req, res) => {
     return res.status(400).json({ error: "intro must be a string" });
   }
   if (
-    week === undefined &&
+    year === undefined &&
+    editionId === undefined &&
+    !create &&
     teamIds === undefined &&
     blurbs === undefined &&
     names === undefined &&
+    owners === undefined &&
+    meta === undefined &&
     intro === undefined &&
-    activeWeek === undefined
+    activeEditionId === undefined
   ) {
     return res.status(400).json({ error: "Nothing to save" });
   }
 
   try {
-    res.json(
-      await writeRankings({ week, teamIds, blurbs, names, intro, activeWeek })
-    );
+    const next = await writeRankings({
+      year,
+      editionId,
+      type,
+      create: Boolean(create),
+      teamIds,
+      blurbs,
+      names,
+      owners,
+      meta,
+      intro,
+      label,
+      week,
+      activeEditionId
+    });
+
+    const y = year ?? next.currentYear;
+    const bucket = getYearBucket(next, y);
+    const editions = sortedEditionEntries(bucket.editions).map(([id, edition]) => ({
+      id,
+      ...edition
+    }));
+
+    res.json({
+      currentYear: next.currentYear,
+      year: y,
+      live: bucket.live,
+      activeEditionId: bucket.activeEditionId,
+      editions,
+      years: listYears(next)
+    });
   } catch (error) {
     console.error("Failed to save rankings:", error);
     res.status(500).json({

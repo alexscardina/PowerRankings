@@ -14,6 +14,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { rankDelta } from './rankUtils';
+import { EDITION_TYPES } from './editionUtils';
 import TeamRankCard from './TeamRankCard';
 
 export default function PowerRankingsList({
@@ -22,11 +23,13 @@ export default function PowerRankingsList({
   onReorder,
   cardStats,
   blurbs,
-  draftNotes = {},
+  teamMeta = {},
   teamNames,
   onBlurbChange,
   previousTeamIds,
-  showMatchup = true
+  editionType = EDITION_TYPES.week,
+  editionLabel = '',
+  live = true
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -75,10 +78,15 @@ export default function PowerRankingsList({
               rankChange={rankDelta(team.id, currentTeamIds, previousTeamIds)}
               isAdmin={isAdmin}
               stats={cardStats?.byTeamId?.[team.id]}
-              draftNotes={
-                draftNotes[String(team.id)] || draftNotes[team.id] || null
+              teamMeta={teamMeta[String(team.id)] || teamMeta[team.id] || null}
+              editionType={editionType}
+              editionLabel={editionLabel}
+              live={live}
+              recordLabel={
+                teamMeta[String(team.id)]?.record ||
+                teamMeta[team.id]?.record ||
+                null
               }
-              showMatchup={showMatchup}
               blurb={blurbs[String(team.id)] || blurbs[team.id] || ''}
               onBlurbChange={onBlurbChange}
             />
