@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import matchTeamOwner from './matchTeamOwner';
 import orderTeams from './orderTeams';
-import buildTeamCardStats from './buildTeamCardStats';
+import buildTeamCardStats, {
+  buildMidseasonCardStats
+} from './buildTeamCardStats';
 import PowerRankingsList from './PowerRankingsList';
 import {
   CREATE_TYPE_OPTIONS,
@@ -9,7 +11,8 @@ import {
   previousEditionId,
   scoringPeriodForEdition,
   seasonStamp,
-  usesEspnMatchup
+  usesEspnMatchup,
+  usesEspnMidseason
 } from './editionUtils';
 import './App.css';
 
@@ -62,6 +65,7 @@ export default function App() {
   const [saveError, setSaveError] = useState(null);
   const blurbTimer = useRef(null);
   const introTimer = useRef(null);
+  const metaTimer = useRef(null);
   const editionsRef = useRef([]);
   const selectedEditionRef = useRef(null);
 
@@ -110,7 +114,7 @@ export default function App() {
 
   const cardStats = useMemo(() => {
     if (
-      !usesEspnMatchup(selectedEdition, live) ||
+      !live ||
       !leagueData ||
       !espnTeams.length ||
       rosterEditionId !== selectedEditionId
@@ -118,7 +122,13 @@ export default function App() {
       return null;
     }
     const week = scoringPeriodForEdition(selectedEdition);
-    return buildTeamCardStats(leagueData, espnTeams, week, teamNames);
+    if (usesEspnMatchup(selectedEdition, live)) {
+      return buildTeamCardStats(leagueData, espnTeams, week, teamNames);
+    }
+    if (usesEspnMidseason(selectedEdition, live)) {
+      return buildMidseasonCardStats(leagueData, espnTeams, week);
+    }
+    return null;
   }, [
     selectedEdition,
     live,
@@ -234,6 +244,7 @@ export default function App() {
       clearInterval(id);
       if (blurbTimer.current) clearTimeout(blurbTimer.current);
       if (introTimer.current) clearTimeout(introTimer.current);
+      if (metaTimer.current) clearTimeout(metaTimer.current);
     };
   }, [selectedYear, selectedEditionId, showAdminGate]);
 
@@ -357,6 +368,46 @@ export default function App() {
     }, 500);
   }
 
+  function snapshotMidseasonMeta(edition, statsByTeamId) {
+    const next = { ...(edition?.meta || {}) };
+    for (const [teamId, stats] of Object.entries(statsByTeamId || {})) {
+      const key = String(teamId);
+      next[key] = {
+        ...(next[key] || {}),
+        h2hRecord: stats.h2hRecord,
+        medianRecord: stats.medianRecord,
+        pointsScored: stats.pointsScored,
+        record: stats.recordLabel
+      };
+    }
+    return next;
+  }
+
+  function handleMetaChange(teamId, patch) {
+    const editionId = selectedEditionRef.current;
+    const edition = editionsRef.current.find((e) => e.id === editionId) || {
+      meta: {}
+    };
+    const key = String(teamId);
+    const nextMeta = {
+      ...edition.meta,
+      [key]: {
+        ...(edition.meta?.[key] || {}),
+        ...patch
+      }
+    };
+    updateEditionLocal(editionId, { meta: nextMeta });
+    if (metaTimer.current) clearTimeout(metaTimer.current);
+    metaTimer.current = setTimeout(() => {
+      setSaveError(null);
+      const latest = editionsRef.current.find((e) => e.id === editionId);
+      saveRankings({
+        editionId,
+        meta: latest?.meta || nextMeta
+      }).catch((err) => setSaveError(err.message));
+    }, 500);
+  }
+
   function handleBlurbChange(teamId, value) {
     const editionId = selectedEditionRef.current;
     const edition = editionsRef.current.find((e) => e.id === editionId) || {
@@ -410,12 +461,17 @@ export default function App() {
       const names = live
         ? { ...edition.names, ...snapshotTeamNames() }
         : edition.names || {};
+      const meta =
+        edition.type === EDITION_TYPES.midseason && cardStats?.byTeamId
+          ? snapshotMidseasonMeta(edition, cardStats.byTeamId)
+          : edition.meta;
       await saveRankings({
         editionId: selectedEditionId,
         teamIds: edition.teamIds,
         blurbs: edition.blurbs,
         names,
         owners: edition.owners,
+        meta,
         intro: edition.intro || '',
         activeEditionId: selectedEditionId
       });
@@ -579,6 +635,11 @@ export default function App() {
           teamMeta={teamMeta}
           teamNames={teamNames}
           onBlurbChange={handleBlurbChange}
+          onMetaChange={
+            selectedEdition.type === EDITION_TYPES.midseason
+              ? handleMetaChange
+              : undefined
+          }
           previousTeamIds={previousTeamIds}
           editionType={selectedEdition.type || EDITION_TYPES.week}
           editionLabel={selectedEdition.label || ''}

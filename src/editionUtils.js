@@ -22,6 +22,10 @@ export function usesEspnMatchup(edition, live) {
   return Boolean(live && edition?.type === EDITION_TYPES.week);
 }
 
+export function usesEspnMidseason(edition, live) {
+  return Boolean(live && edition?.type === EDITION_TYPES.midseason);
+}
+
 export function usesDraftMiddle(edition) {
   return edition?.type === EDITION_TYPES.draft;
 }

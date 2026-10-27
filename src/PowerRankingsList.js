@@ -26,6 +26,7 @@ export default function PowerRankingsList({
   teamMeta = {},
   teamNames,
   onBlurbChange,
+  onMetaChange,
   previousTeamIds,
   editionType = EDITION_TYPES.week,
   editionLabel = '',
@@ -83,12 +84,14 @@ export default function PowerRankingsList({
               editionLabel={editionLabel}
               live={live}
               recordLabel={
+                cardStats?.byTeamId?.[team.id]?.recordLabel ||
                 teamMeta[String(team.id)]?.record ||
                 teamMeta[team.id]?.record ||
                 null
               }
               blurb={blurbs[String(team.id)] || blurbs[team.id] || ''}
               onBlurbChange={onBlurbChange}
+              onMetaChange={onMetaChange}
             />
           ))}
         </div>

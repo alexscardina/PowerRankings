@@ -4,7 +4,7 @@ const { envValue } = require("./env");
 const ESPN_BASE =
   "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl";
 
-async function getLeagueData(season, view, scoringPeriodId) {
+async function getLeagueData(season, view, scoringPeriodId, extraHeaders = {}) {
   const leagueId = envValue("LEAGUE_ID");
   const espnS2 = envValue("ESPN_S2");
   const swid = envValue("ESPN_SWID");
@@ -24,7 +24,8 @@ async function getLeagueData(season, view, scoringPeriodId) {
       indexes: null
     },
     headers: {
-      Cookie: `espn_s2=${espnS2}; SWID=${swid}`
+      Cookie: `espn_s2=${espnS2}; SWID=${swid}`,
+      ...extraHeaders
     }
   });
 

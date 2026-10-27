@@ -4172,6 +4172,44 @@
           "owners": {},
           "meta": {},
           "intro": ""
+        },
+        "midseason-7": {
+          "type": "midseason",
+          "week": 7,
+          "order": 6,
+          "label": "Mid-Season Report Card",
+          "teamIds": [
+            8,
+            6,
+            12,
+            11,
+            3,
+            1,
+            9,
+            10,
+            2,
+            4,
+            5,
+            7
+          ],
+          "blurbs": {},
+          "names": {
+            "1": "team of bums v9",
+            "2": "Rise of the Slim Reaper",
+            "3": "Get these Nabers out of here",
+            "4": "Team Strong",
+            "5": "I Don't Gibb A Shough",
+            "6": "The Hospital",
+            "7": "Brock Hard",
+            "8": "Scott Hansons  Protege",
+            "9": "New Year Chris Leak",
+            "10": "McConkeez Nuts",
+            "11": "The Machine",
+            "12": "Just Sports"
+          },
+          "owners": {},
+          "meta": {},
+          "intro": ""
         }
       }
     }

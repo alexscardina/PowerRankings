@@ -529,6 +529,87 @@ body {
   border-color: #d4af37;
 }
 
+.team-rank-card__grade-edit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem 0.9rem;
+  align-items: start;
+  margin-top: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.55rem;
+  border: 2px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.team-rank-card__grade-edit.is-f {
+  color: #7a1212;
+  border-color: #7a1212;
+  background: rgba(122, 18, 18, 0.08);
+}
+
+.team-rank-card__grade-edit.is-d {
+  color: #c62828;
+  border-color: #c62828;
+  background: rgba(198, 40, 40, 0.08);
+}
+
+.team-rank-card__grade-edit.is-c {
+  color: #c45c12;
+  border-color: #c45c12;
+  background: rgba(196, 92, 18, 0.08);
+}
+
+.team-rank-card__grade-edit.is-b {
+  color: #1f6b4a;
+  border-color: #1f6b4a;
+  background: rgba(31, 107, 74, 0.08);
+}
+
+.team-rank-card__grade-edit.is-a {
+  color: #8a6a00;
+  border-color: #d4af37;
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.team-rank-card__grade-letter-field,
+.team-rank-card__grade-note-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.team-rank-card__grade-select,
+.team-rank-card__grade-note-input,
+.team-rank-card__pick-input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+
+.team-rank-card__grade-select {
+  font-size: 1.35rem;
+  font-weight: 800;
+  width: 4.5rem;
+}
+
+.team-rank-card__grade-note-input {
+  resize: vertical;
+  min-width: 12rem;
+  line-height: 1.35;
+}
+
+.team-rank-card__pick-input {
+  margin: 0.15rem 0 0.35rem;
+  text-align: right;
+}
+
 .team-rank-card__player {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -633,7 +714,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .team-rank-card__grade {
+  .team-rank-card__grade,
+  .team-rank-card__grade-edit {
     grid-template-columns: 1fr;
     gap: 0.35rem;
   }

@@ -198,28 +198,91 @@ function parseLetterGrade(grade) {
   };
 }
 
-function MidseasonMiddle({ meta }) {
-  const parsedGrade = parseLetterGrade(meta?.grade);
-  const gradeNote = meta?.grade
-    ? String(meta.grade).replace(/^[A-F][+-]?\s*[-–—:]?\s*/i, '').trim()
-    : '';
+function gradeExplanation(meta) {
+  if (meta?.gradeNote) return meta.gradeNote;
+  if (!meta?.grade) return '';
+  return String(meta.grade).replace(/^[A-F][+-]?\s*[-–—:]?\s*/i, '').trim();
+}
+
+const GRADE_OPTIONS = [
+  'A+',
+  'A',
+  'A-',
+  'B+',
+  'B',
+  'B-',
+  'C+',
+  'C',
+  'C-',
+  'D+',
+  'D',
+  'D-',
+  'F'
+];
+
+function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange }) {
+  const h2hRecord = stats?.h2hRecord || meta?.h2hRecord;
+  const medianRecord = stats?.medianRecord || meta?.medianRecord;
+  const pointsScored = stats?.pointsScored || meta?.pointsScored;
+  const letter = parseLetterGrade(meta?.grade)?.display || '';
+  const parsedGrade = parseLetterGrade(letter);
+  const note = gradeExplanation(meta);
+
+  function patchMeta(patch) {
+    onMetaChange?.(patch);
+  }
 
   return (
     <div className="team-rank-card__middle is-midseason">
       <div className="team-rank-card__matchup">
         <span className="team-rank-card__week-badge">Mid-Season</span>
-        <MetaLine label="H2H:" value={meta?.h2hRecord} />
-        <MetaLine label="Median:" value={meta?.medianRecord} />
-        <ResultLine label="Points:" value={meta?.pointsScored} />
-        {parsedGrade ? (
+        <MetaLine label="H2H:" value={h2hRecord} />
+        <MetaLine label="Median:" value={medianRecord} />
+        <ResultLine label="Points:" value={pointsScored} />
+        {isAdmin ? (
+          <div
+            className={`team-rank-card__grade-edit${
+              parsedGrade ? ` is-${parsedGrade.letter.toLowerCase()}` : ''
+            }`}
+          >
+            <label className="team-rank-card__grade-letter-field">
+              <span className="team-rank-card__player-label">Grade</span>
+              <select
+                className="team-rank-card__grade-select"
+                value={letter}
+                onChange={(e) => patchMeta({ grade: e.target.value })}
+                aria-label="Midterm grade"
+              >
+                <option value="">—</option>
+                {GRADE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="team-rank-card__grade-note-field">
+              <span className="team-rank-card__player-label">
+                Grade explanation
+              </span>
+              <textarea
+                className="team-rank-card__grade-note-input"
+                value={note}
+                placeholder="See me after class…"
+                rows={2}
+                onChange={(e) => patchMeta({ gradeNote: e.target.value })}
+              />
+            </label>
+          </div>
+        ) : parsedGrade ? (
           <div
             className={`team-rank-card__grade is-${parsedGrade.letter.toLowerCase()}`}
           >
             <span className="team-rank-card__grade-letter">
               {parsedGrade.display}
             </span>
-            {gradeNote ? (
-              <span className="team-rank-card__grade-note">{gradeNote}</span>
+            {note ? (
+              <span className="team-rank-card__grade-note">{note}</span>
             ) : null}
           </div>
         ) : null}
@@ -227,13 +290,33 @@ function MidseasonMiddle({ meta }) {
       <div className="team-rank-card__player team-rank-card__draft-picks">
         <div>
           <span className="team-rank-card__player-label">Best pick</span>
-          <span className="team-rank-card__player-name">
-            {meta?.bestPick || '—'}
-          </span>
+          {isAdmin ? (
+            <input
+              className="team-rank-card__pick-input"
+              type="text"
+              value={meta?.bestPick || ''}
+              placeholder="Best draft pick"
+              onChange={(e) => patchMeta({ bestPick: e.target.value })}
+            />
+          ) : (
+            <span className="team-rank-card__player-name">
+              {meta?.bestPick || '—'}
+            </span>
+          )}
           <span className="team-rank-card__player-label">Worst pick</span>
-          <span className="team-rank-card__player-name">
-            {meta?.worstPick || '—'}
-          </span>
+          {isAdmin ? (
+            <input
+              className="team-rank-card__pick-input"
+              type="text"
+              value={meta?.worstPick || ''}
+              placeholder="Worst draft pick"
+              onChange={(e) => patchMeta({ worstPick: e.target.value })}
+            />
+          ) : (
+            <span className="team-rank-card__player-name">
+              {meta?.worstPick || '—'}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -411,14 +494,29 @@ function MatchupMiddle({ stats, imgFailed, setImgFailed }) {
   );
 }
 
-function EditionMiddle({ editionType, editionLabel, meta, stats, live }) {
+function EditionMiddle({
+  editionType,
+  editionLabel,
+  meta,
+  stats,
+  live,
+  isAdmin,
+  onMetaChange
+}) {
   const [imgFailed, setImgFailed] = useState(false);
 
   if (editionType === EDITION_TYPES.draft) {
     return <DraftMiddle meta={meta} badge={editionLabel} />;
   }
   if (editionType === EDITION_TYPES.midseason) {
-    return <MidseasonMiddle meta={meta} />;
+    return (
+      <MidseasonMiddle
+        meta={meta}
+        stats={stats}
+        isAdmin={isAdmin}
+        onMetaChange={onMetaChange}
+      />
+    );
   }
   if (editionType === EDITION_TYPES.playoff) {
     return <PlayoffMiddle meta={meta} />;
@@ -454,7 +552,8 @@ export default function TeamRankCard({
   live = true,
   recordLabel = null,
   blurb,
-  onBlurbChange
+  onBlurbChange,
+  onMetaChange
 }) {
   const {
     attributes,
@@ -475,7 +574,9 @@ export default function TeamRankCard({
   };
 
   const showRecord =
-    live && editionType === EDITION_TYPES.week
+    live &&
+    (editionType === EDITION_TYPES.week ||
+      editionType === EDITION_TYPES.midseason)
       ? true
       : Boolean(recordLabel || teamMeta?.record);
 
@@ -521,6 +622,12 @@ export default function TeamRankCard({
         meta={teamMeta}
         stats={stats}
         live={live}
+        isAdmin={isAdmin}
+        onMetaChange={
+          onMetaChange
+            ? (patch) => onMetaChange(team.id, patch)
+            : undefined
+        }
       />
 
       <div className="team-rank-card__bottom">

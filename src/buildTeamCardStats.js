@@ -263,3 +263,112 @@ export default function buildTeamCardStats(
 
   return { week, byTeamId };
 }
+
+function weekIsComplete(matchups) {
+  if (!matchups.length) return false;
+  return matchups.every(
+    (matchup) => matchup.winner && matchup.winner !== "UNDECIDED"
+  );
+}
+
+function formatPointsScored(place, total, weeksPlayed, teamCount) {
+  const avg = weeksPlayed > 0 ? total / weeksPlayed : 0;
+  const emoji = place === 1 ? " 🏆" : place === teamCount ? " 💩" : "";
+  return `${ordinal(place)} - ${total.toFixed(2)} (${avg.toFixed(2)} avg.)${emoji}`;
+}
+
+/** Season H2H, vs-median, and points through completed weeks up to `week`. */
+export function buildMidseasonCardStats(leagueData, teams, weekOverride) {
+  const week = weekOverride ?? getCompletedWeek(leagueData);
+  const schedule = leagueData?.schedule || [];
+  const h2h = new Map();
+  const median = new Map();
+  const points = new Map();
+  let weeksPlayed = 0;
+
+  function ensure(map, teamId) {
+    if (!map.has(teamId)) {
+      map.set(teamId, emptyRecord());
+    }
+    return map.get(teamId);
+  }
+
+  function addPoints(teamId, value) {
+    if (!teamId || typeof value !== "number") return;
+    points.set(teamId, (points.get(teamId) || 0) + value);
+  }
+
+  for (let period = 1; period <= week; period++) {
+    const matchups = schedule.filter(
+      (matchup) => matchup.matchupPeriodId === period
+    );
+    if (!weekIsComplete(matchups)) continue;
+    weeksPlayed += 1;
+
+    for (const matchup of matchups) {
+      const home = ensure(h2h, matchup.home?.teamId);
+      const away = ensure(h2h, matchup.away?.teamId);
+
+      if (matchup.winner === "TIE") {
+        home.ties += 1;
+        away.ties += 1;
+      } else if (matchup.winner === "HOME") {
+        home.wins += 1;
+        away.losses += 1;
+      } else if (matchup.winner === "AWAY") {
+        away.wins += 1;
+        home.losses += 1;
+      }
+
+      addPoints(matchup.home?.teamId, matchup.home?.totalPoints);
+      addPoints(matchup.away?.teamId, matchup.away?.totalPoints);
+    }
+
+    const places = scoringPlaces(matchups);
+    for (const [teamId, scoring] of places) {
+      const record = ensure(median, teamId);
+      if (scoring.medianResult === "W") {
+        record.wins += 1;
+      } else {
+        record.losses += 1;
+      }
+    }
+  }
+
+  const ranked = [...teams]
+    .map((team) => ({
+      id: team.id,
+      points: points.get(team.id) || 0
+    }))
+    .sort((a, b) => b.points - a.points || a.id - b.id);
+
+  const placeById = new Map();
+  ranked.forEach((row, index) => {
+    placeById.set(row.id, index + 1);
+  });
+
+  const byTeamId = {};
+  for (const team of teams) {
+    const h2hRecord = h2h.get(team.id) || emptyRecord();
+    const medianRecord = median.get(team.id) || emptyRecord();
+    const combined = {
+      wins: h2hRecord.wins + medianRecord.wins,
+      losses: h2hRecord.losses + medianRecord.losses,
+      ties: h2hRecord.ties + medianRecord.ties
+    };
+    const place = placeById.get(team.id) || teams.length;
+    const total = points.get(team.id) || 0;
+
+    byTeamId[team.id] = {
+      week,
+      h2hRecord: formatRecord(h2hRecord),
+      medianRecord: formatRecord(medianRecord),
+      pointsScored: formatPointsScored(place, total, weeksPlayed, teams.length),
+      scoringPlace: place,
+      record: combined,
+      recordLabel: formatRecord(combined)
+    };
+  }
+
+  return { week, byTeamId };
+}
