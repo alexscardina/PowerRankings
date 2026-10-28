@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useDraftField from './useDraftField';
 import matchTeamOwner from './matchTeamOwner';
 import orderTeams from './orderTeams';
@@ -21,6 +21,23 @@ const ADMIN_TOKEN_KEY = 'adminToken';
 
 function hasAdminGate() {
   return new URLSearchParams(window.location.search).has('admin');
+}
+
+function mergeRemoteEditions(remote, local) {
+  const localById = new Map((local || []).map((edition) => [edition.id, edition]));
+  return (remote || []).map((edition) => {
+    const current = localById.get(edition.id);
+    if (!current) return edition;
+    return {
+      ...edition,
+      teamIds: current.teamIds,
+      blurbs: current.blurbs,
+      names: current.names,
+      owners: current.owners,
+      meta: current.meta,
+      intro: current.intro
+    };
+  });
 }
 
 function teamsFromEdition(edition, espnTeams) {
@@ -73,42 +90,30 @@ export default function App() {
   const liveRef = useRef(true);
   const activeEditionIdRef = useRef(null);
 
-  function hasUnsavedEdits() {
-    return Boolean(
-      blurbTimer.current ||
-        introTimer.current ||
-        metaTimer.current ||
-        savesInFlightRef.current > 0
-    );
-  }
+  const hasUnsavedEdits = useCallback(
+    () =>
+      Boolean(
+        blurbTimer.current ||
+          introTimer.current ||
+          metaTimer.current ||
+          savesInFlightRef.current > 0
+      ),
+    []
+  );
 
-  function mergeRemoteEditions(remote, local) {
-    const localById = new Map((local || []).map((edition) => [edition.id, edition]));
-    return (remote || []).map((edition) => {
-      const current = localById.get(edition.id);
-      if (!current) return edition;
-      return {
-        ...edition,
-        teamIds: current.teamIds,
-        blurbs: current.blurbs,
-        names: current.names,
-        owners: current.owners,
-        meta: current.meta,
-        intro: current.intro
-      };
-    });
-  }
-
-  function applyRemoteEditions(remote, { force = false } = {}) {
-    setEditions((prev) => {
-      const next =
-        !force && hasUnsavedEdits()
-          ? mergeRemoteEditions(remote, prev)
-          : remote || [];
-      editionsRef.current = next;
-      return next;
-    });
-  }
+  const applyRemoteEditions = useCallback(
+    (remote, { force = false } = {}) => {
+      setEditions((prev) => {
+        const next =
+          !force && hasUnsavedEdits()
+            ? mergeRemoteEditions(remote, prev)
+            : remote || [];
+        editionsRef.current = next;
+        return next;
+      });
+    },
+    [hasUnsavedEdits]
+  );
 
   const isAdmin = showAdminGate && Boolean(adminToken);
   const showAdminPanel = showAdminGate;
@@ -318,7 +323,13 @@ export default function App() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [selectedYear, selectedEditionId, showAdminGate, isAdmin]);
+  }, [
+    selectedYear,
+    selectedEditionId,
+    showAdminGate,
+    isAdmin,
+    applyRemoteEditions
+  ]);
 
   async function saveRankings(payload) {
     savesInFlightRef.current += 1;

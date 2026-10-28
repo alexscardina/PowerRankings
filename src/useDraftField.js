@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Local input state that does not reset when the parent re-renders with
@@ -6,9 +6,11 @@ import { useEffect, useState } from 'react';
  */
 export default function useDraftField(externalValue, resetKey) {
   const [value, setValue] = useState(externalValue || '');
+  const externalRef = useRef(externalValue);
+  externalRef.current = externalValue;
 
   useEffect(() => {
-    setValue(externalValue || '');
+    setValue(externalRef.current || '');
   }, [resetKey]);
 
   return [value, setValue];
