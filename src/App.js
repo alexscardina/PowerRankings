@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import useDraftField from './useDraftField';
 import matchTeamOwner from './matchTeamOwner';
 import orderTeams from './orderTeams';
 import buildTeamCardStats, {
@@ -69,6 +70,8 @@ export default function App() {
   const editionsRef = useRef([]);
   const selectedEditionRef = useRef(null);
   const savesInFlightRef = useRef(0);
+  const liveRef = useRef(true);
+  const activeEditionIdRef = useRef(null);
 
   function hasUnsavedEdits() {
     return Boolean(
@@ -97,13 +100,14 @@ export default function App() {
   }
 
   function applyRemoteEditions(remote, { force = false } = {}) {
-    const next =
-      !force && hasUnsavedEdits()
-        ? mergeRemoteEditions(remote, editionsRef.current)
-        : remote || [];
-    editionsRef.current = next;
-    setEditions(next);
-    return next;
+    setEditions((prev) => {
+      const next =
+        !force && hasUnsavedEdits()
+          ? mergeRemoteEditions(remote, prev)
+          : remote || [];
+      editionsRef.current = next;
+      return next;
+    });
   }
 
   const isAdmin = showAdminGate && Boolean(adminToken);
@@ -148,6 +152,10 @@ export default function App() {
   );
   const blurbs = selectedEdition?.blurbs || {};
   const teamMeta = selectedEdition?.meta || {};
+  const [draftIntro, setDraftIntro] = useDraftField(
+    selectedEdition?.intro || '',
+    selectedEditionId
+  );
 
   const cardStats = useMemo(() => {
     if (
@@ -191,57 +199,90 @@ export default function App() {
   }, [selectedEditionId]);
 
   useEffect(() => {
+    liveRef.current = live;
+  }, [live]);
+
+  useEffect(() => {
+    activeEditionIdRef.current = activeEditionId;
+  }, [activeEditionId]);
+
+  useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      try {
-        const yearQuery =
-          selectedYear != null ? `?year=${selectedYear}` : '';
-        const rankingsRes = await fetch(`/api/rankings${yearQuery}`);
-        if (!rankingsRes.ok) {
-          let message = 'Failed to load rankings';
-          try {
-            const body = await rankingsRes.json();
-            if (body?.error) message = body.error;
-            if (body?.details) message = `${message}: ${body.details}`;
-          } catch {
-            // ignore
-          }
-          throw new Error(message);
+    async function applyRankingsPayload(rankings) {
+      const year = rankings.year;
+      const isLive = Boolean(rankings.live);
+      const nextEditions = rankings.editions || [];
+      const activeId = rankings.activeEditionId;
+      setYearList(rankings.years || []);
+      setSelectedYear(year);
+      setLive(isLive);
+      setActiveEditionId(activeId);
+      applyRemoteEditions(nextEditions);
+
+      setSelectedEditionId((prev) => {
+        if (prev && nextEditions.some((e) => e.id === prev)) return prev;
+        return activeId || nextEditions[nextEditions.length - 1]?.id || null;
+      });
+
+      return { isLive, nextEditions, activeId };
+    }
+
+    async function loadLeague(isLive, nextEditions, activeId) {
+      if (!isLive) {
+        setLeagueData(null);
+        setEspnTeams([]);
+        setRosterEditionId(null);
+        return;
+      }
+
+      const edition =
+        nextEditions.find((e) => e.id === (selectedEditionRef.current || activeId)) ||
+        nextEditions.find((e) => e.id === activeId) ||
+        editionsRef.current.find((e) => e.id === selectedEditionRef.current);
+      const scoringPeriodId = scoringPeriodForEdition(edition);
+      const leagueUrl =
+        scoringPeriodId != null
+          ? `/api/league?scoringPeriodId=${scoringPeriodId}`
+          : '/api/league';
+      const leagueRes = await fetch(leagueUrl);
+      if (!leagueRes.ok) {
+        let message = 'Failed to load league data';
+        try {
+          const body = await leagueRes.json();
+          if (body?.error) message = body.error;
+          if (body?.details) message = `${message}: ${body.details}`;
+        } catch {
+          // ignore
         }
+        throw new Error(message);
+      }
+      const data = await leagueRes.json();
+      if (cancelled) return;
+      const members = (data.members || []).map((member) => ({
+        id: member.id,
+        firstName: member.firstName,
+        lastName: member.lastName
+      }));
+      setLeagueData(data);
+      setEspnTeams(matchTeamOwner(data.teams || [], members));
+      setRosterEditionId(edition?.id || activeId);
+    }
 
-        const rankings = await rankingsRes.json();
-        if (cancelled) return;
+    async function load({ includeRankings = true } = {}) {
+      try {
+        let isLive = liveRef.current;
+        let nextEditions = editionsRef.current;
+        let activeId = activeEditionIdRef.current;
 
-        const year = rankings.year;
-        const isLive = Boolean(rankings.live);
-        const nextEditions = rankings.editions || [];
-        const activeId = rankings.activeEditionId;
-        setYearList(rankings.years || []);
-        setSelectedYear(year);
-        setLive(isLive);
-        setActiveEditionId(activeId);
-        applyRemoteEditions(nextEditions);
-
-        setSelectedEditionId((prev) => {
-          if (prev && nextEditions.some((e) => e.id === prev)) return prev;
-          return activeId || nextEditions[nextEditions.length - 1]?.id || null;
-        });
-
-        if (isLive) {
-          const edition =
-            nextEditions.find((e) => e.id === (selectedEditionRef.current || activeId)) ||
-            nextEditions.find((e) => e.id === activeId);
-          const scoringPeriodId = scoringPeriodForEdition(edition);
-          const leagueUrl =
-            scoringPeriodId != null
-              ? `/api/league?scoringPeriodId=${scoringPeriodId}`
-              : '/api/league';
-          const leagueRes = await fetch(leagueUrl);
-          if (!leagueRes.ok) {
-            let message = 'Failed to load league data';
+        if (includeRankings) {
+          const yearQuery =
+            selectedYear != null ? `?year=${selectedYear}` : '';
+          const rankingsRes = await fetch(`/api/rankings${yearQuery}`);
+          if (!rankingsRes.ok) {
+            let message = 'Failed to load rankings';
             try {
-              const body = await leagueRes.json();
+              const body = await rankingsRes.json();
               if (body?.error) message = body.error;
               if (body?.details) message = `${message}: ${body.details}`;
             } catch {
@@ -249,23 +290,17 @@ export default function App() {
             }
             throw new Error(message);
           }
-          const data = await leagueRes.json();
+
+          const rankings = await rankingsRes.json();
           if (cancelled) return;
-          const members = (data.members || []).map((member) => ({
-            id: member.id,
-            firstName: member.firstName,
-            lastName: member.lastName
-          }));
-          setLeagueData(data);
-          setEspnTeams(matchTeamOwner(data.teams || [], members));
-          setRosterEditionId(edition?.id || activeId);
-        } else {
-          setLeagueData(null);
-          setEspnTeams([]);
-          setRosterEditionId(null);
+          const applied = await applyRankingsPayload(rankings);
+          isLive = applied.isLive;
+          nextEditions = applied.nextEditions;
+          activeId = applied.activeId;
         }
 
-        setError(null);
+        await loadLeague(isLive, nextEditions, activeId);
+        if (!cancelled) setError(null);
       } catch (err) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -273,13 +308,17 @@ export default function App() {
       }
     }
 
-    load();
-    const id = setInterval(load, 60_000);
+    load({ includeRankings: true });
+    const id = setInterval(() => {
+      // Keep ESPN scores fresh, but do not refetch rankings while editing —
+      // a stale GET would restore deleted characters in the text fields.
+      load({ includeRankings: !isAdmin });
+    }, 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [selectedYear, selectedEditionId, showAdminGate]);
+  }, [selectedYear, selectedEditionId, showAdminGate, isAdmin]);
 
   async function saveRankings(payload) {
     savesInFlightRef.current += 1;
@@ -654,10 +693,13 @@ export default function App() {
           <span className="week-intro-edit__label">Edition intro</span>
           <textarea
             className="week-intro-edit__input"
-            value={selectedEdition?.intro || ''}
+            value={draftIntro}
             placeholder="Optional text above this edition’s rankings…"
             rows={3}
-            onChange={(e) => handleIntroChange(e.target.value)}
+            onChange={(e) => {
+              setDraftIntro(e.target.value);
+              handleIntroChange(e.target.value);
+            }}
           />
         </label>
       )}

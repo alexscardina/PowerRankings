@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { EDITION_TYPES } from './editionUtils';
+import useDraftField from './useDraftField';
 
 function RankChange({ rankChange }) {
   if (rankChange == null) {
@@ -220,13 +221,20 @@ const GRADE_OPTIONS = [
   'F'
 ];
 
-function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange }) {
+function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange, draftKey }) {
   const h2hRecord = stats?.h2hRecord || meta?.h2hRecord;
   const medianRecord = stats?.medianRecord || meta?.medianRecord;
   const pointsScored = stats?.pointsScored || meta?.pointsScored;
-  const letter = parseLetterGrade(meta?.grade)?.display || '';
+  const savedLetter = parseLetterGrade(meta?.grade)?.display || '';
+  const savedNote = gradeExplanation(meta);
+  const [letter, setLetter] = useDraftField(savedLetter, draftKey);
+  const [note, setNote] = useDraftField(savedNote, draftKey);
+  const [bestPick, setBestPick] = useDraftField(meta?.bestPick || '', draftKey);
+  const [worstPick, setWorstPick] = useDraftField(
+    meta?.worstPick || '',
+    draftKey
+  );
   const parsedGrade = parseLetterGrade(letter);
-  const note = gradeExplanation(meta);
 
   function patchMeta(patch) {
     onMetaChange?.(patch);
@@ -250,7 +258,10 @@ function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange }) {
               <select
                 className="team-rank-card__grade-select"
                 value={letter}
-                onChange={(e) => patchMeta({ grade: e.target.value })}
+                onChange={(e) => {
+                  setLetter(e.target.value);
+                  patchMeta({ grade: e.target.value });
+                }}
                 aria-label="Midterm grade"
               >
                 <option value="">—</option>
@@ -270,7 +281,10 @@ function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange }) {
                 value={note}
                 placeholder="See me after class…"
                 rows={2}
-                onChange={(e) => patchMeta({ gradeNote: e.target.value })}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  patchMeta({ gradeNote: e.target.value });
+                }}
               />
             </label>
           </div>
@@ -294,9 +308,12 @@ function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange }) {
             <input
               className="team-rank-card__pick-input"
               type="text"
-              value={meta?.bestPick || ''}
+              value={bestPick}
               placeholder="Best draft pick"
-              onChange={(e) => patchMeta({ bestPick: e.target.value })}
+              onChange={(e) => {
+                setBestPick(e.target.value);
+                patchMeta({ bestPick: e.target.value });
+              }}
             />
           ) : (
             <span className="team-rank-card__player-name">
@@ -308,9 +325,12 @@ function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange }) {
             <input
               className="team-rank-card__pick-input"
               type="text"
-              value={meta?.worstPick || ''}
+              value={worstPick}
               placeholder="Worst draft pick"
-              onChange={(e) => patchMeta({ worstPick: e.target.value })}
+              onChange={(e) => {
+                setWorstPick(e.target.value);
+                patchMeta({ worstPick: e.target.value });
+              }}
             />
           ) : (
             <span className="team-rank-card__player-name">
@@ -501,7 +521,8 @@ function EditionMiddle({
   stats,
   live,
   isAdmin,
-  onMetaChange
+  onMetaChange,
+  draftKey
 }) {
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -515,6 +536,7 @@ function EditionMiddle({
         stats={stats}
         isAdmin={isAdmin}
         onMetaChange={onMetaChange}
+        draftKey={draftKey}
       />
     );
   }
@@ -573,6 +595,9 @@ export default function TeamRankCard({
     opacity: isDragging ? 0.85 : 1
   };
 
+  const draftKey = `${editionType}:${editionLabel}:${team.id}`;
+  const [draftBlurb, setDraftBlurb] = useDraftField(blurb || '', draftKey);
+
   const showRecord =
     live &&
     (editionType === EDITION_TYPES.week ||
@@ -628,16 +653,20 @@ export default function TeamRankCard({
             ? (patch) => onMetaChange(team.id, patch)
             : undefined
         }
+        draftKey={draftKey}
       />
 
       <div className="team-rank-card__bottom">
         {isAdmin ? (
           <textarea
             className="team-rank-card__blurb-input"
-            value={blurb || ''}
+            value={draftBlurb}
             placeholder="Write this week's blurb…"
             rows={3}
-            onChange={(e) => onBlurbChange(team.id, e.target.value)}
+            onChange={(e) => {
+              setDraftBlurb(e.target.value);
+              onBlurbChange(team.id, e.target.value);
+            }}
           />
         ) : (
           <p className="team-rank-card__blurb">
