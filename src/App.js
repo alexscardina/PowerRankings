@@ -68,6 +68,43 @@ export default function App() {
   const metaTimer = useRef(null);
   const editionsRef = useRef([]);
   const selectedEditionRef = useRef(null);
+  const savesInFlightRef = useRef(0);
+
+  function hasUnsavedEdits() {
+    return Boolean(
+      blurbTimer.current ||
+        introTimer.current ||
+        metaTimer.current ||
+        savesInFlightRef.current > 0
+    );
+  }
+
+  function mergeRemoteEditions(remote, local) {
+    const localById = new Map((local || []).map((edition) => [edition.id, edition]));
+    return (remote || []).map((edition) => {
+      const current = localById.get(edition.id);
+      if (!current) return edition;
+      return {
+        ...edition,
+        teamIds: current.teamIds,
+        blurbs: current.blurbs,
+        names: current.names,
+        owners: current.owners,
+        meta: current.meta,
+        intro: current.intro
+      };
+    });
+  }
+
+  function applyRemoteEditions(remote, { force = false } = {}) {
+    const next =
+      !force && hasUnsavedEdits()
+        ? mergeRemoteEditions(remote, editionsRef.current)
+        : remote || [];
+    editionsRef.current = next;
+    setEditions(next);
+    return next;
+  }
 
   const isAdmin = showAdminGate && Boolean(adminToken);
   const showAdminPanel = showAdminGate;
@@ -184,8 +221,7 @@ export default function App() {
         setSelectedYear(year);
         setLive(isLive);
         setActiveEditionId(activeId);
-        setEditions(nextEditions);
-        editionsRef.current = nextEditions;
+        applyRemoteEditions(nextEditions);
 
         setSelectedEditionId((prev) => {
           if (prev && nextEditions.some((e) => e.id === prev)) return prev;
@@ -242,45 +278,48 @@ export default function App() {
     return () => {
       cancelled = true;
       clearInterval(id);
-      if (blurbTimer.current) clearTimeout(blurbTimer.current);
-      if (introTimer.current) clearTimeout(introTimer.current);
-      if (metaTimer.current) clearTimeout(metaTimer.current);
     };
   }, [selectedYear, selectedEditionId, showAdminGate]);
 
   async function saveRankings(payload) {
-    const res = await fetch('/api/rankings', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`
-      },
-      body: JSON.stringify({ year: selectedYear, ...payload })
-    });
+    savesInFlightRef.current += 1;
+    try {
+      const res = await fetch('/api/rankings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ year: selectedYear, ...payload })
+      });
 
-    if (!res.ok) {
-      if (res.status === 401) {
-        handleLock();
-        throw new Error('Admin session expired. Log in again.');
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleLock();
+          throw new Error('Admin session expired. Log in again.');
+        }
+        let message = 'Failed to save rankings';
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+          if (body?.details) message = `${message}: ${body.details}`;
+        } catch {
+          // ignore
+        }
+        throw new Error(message);
       }
-      let message = 'Failed to save rankings';
-      try {
-        const body = await res.json();
-        if (body?.error) message = body.error;
-        if (body?.details) message = `${message}: ${body.details}`;
-      } catch {
-        // ignore
+
+      const data = await res.json();
+      if (payload.create) {
+        applyRemoteEditions(data.editions || [], { force: true });
       }
-      throw new Error(message);
+      setActiveEditionId(data.activeEditionId);
+      setLive(Boolean(data.live));
+      setYearList(data.years || []);
+      return data;
+    } finally {
+      savesInFlightRef.current = Math.max(0, savesInFlightRef.current - 1);
     }
-
-    const data = await res.json();
-    setEditions(data.editions || []);
-    editionsRef.current = data.editions || [];
-    setActiveEditionId(data.activeEditionId);
-    setLive(Boolean(data.live));
-    setYearList(data.years || []);
-    return data;
   }
 
   function updateEditionLocal(editionId, patch) {
