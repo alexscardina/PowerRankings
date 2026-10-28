@@ -163,24 +163,126 @@ function ResultLine({ label, value, forceMedian = false }) {
   );
 }
 
-function DraftMiddle({ meta, badge }) {
+function MetaDraftInput({
+  label,
+  saved,
+  draftKey,
+  placeholder,
+  multiline = false,
+  rows = 2,
+  align = 'left',
+  tone,
+  onChange
+}) {
+  const [value, setValue] = useDraftField(saved || '', `${draftKey}:${label}`);
+
+  function handleChange(next) {
+    setValue(next);
+    onChange(next);
+  }
+
+  return (
+    <label className="team-rank-card__meta-field">
+      {label ? (
+        <span
+          className={`team-rank-card__player-label${tone ? ` is-${tone}` : ''}`}
+        >
+          {label}
+        </span>
+      ) : null}
+      {multiline ? (
+        <textarea
+          className="team-rank-card__grade-note-input"
+          value={value}
+          rows={rows}
+          placeholder={placeholder}
+          onChange={(e) => handleChange(e.target.value)}
+        />
+      ) : (
+        <input
+          className={`team-rank-card__pick-input${
+            align === 'right' ? '' : ' is-left'
+          }`}
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => handleChange(e.target.value)}
+        />
+      )}
+    </label>
+  );
+}
+
+function DraftMiddle({ meta, badge, isAdmin, onMetaChange, draftKey }) {
+  function patchMeta(patch) {
+    onMetaChange?.(patch);
+  }
+
   return (
     <div className="team-rank-card__middle">
       <div className="team-rank-card__matchup">
         <span className="team-rank-card__week-badge">{badge || 'Draft Recap'}</span>
-        <MetaLine label="Strengths:" value={meta?.strengths} tone="strength" />
-        <MetaLine label="Weaknesses:" value={meta?.weaknesses} tone="weakness" />
+        {isAdmin ? (
+          <>
+            <MetaDraftInput
+              label="Strengths"
+              saved={meta?.strengths}
+              draftKey={draftKey}
+              placeholder="What this team got right…"
+              multiline
+              tone="strength"
+              onChange={(value) => patchMeta({ strengths: value })}
+            />
+            <MetaDraftInput
+              label="Weaknesses"
+              saved={meta?.weaknesses}
+              draftKey={draftKey}
+              placeholder="Where this team is thin…"
+              multiline
+              tone="weakness"
+              onChange={(value) => patchMeta({ weaknesses: value })}
+            />
+          </>
+        ) : (
+          <>
+            <MetaLine label="Strengths:" value={meta?.strengths} tone="strength" />
+            <MetaLine label="Weaknesses:" value={meta?.weaknesses} tone="weakness" />
+          </>
+        )}
       </div>
       <div className="team-rank-card__player team-rank-card__draft-picks">
         <div>
-          <span className="team-rank-card__player-label">Best pick</span>
-          <span className="team-rank-card__player-name">
-            {meta?.bestPick || '—'}
-          </span>
-          <span className="team-rank-card__player-label">Worst pick</span>
-          <span className="team-rank-card__player-name">
-            {meta?.worstPick || '—'}
-          </span>
+          {isAdmin ? (
+            <>
+              <MetaDraftInput
+                label="Best pick"
+                saved={meta?.bestPick}
+                draftKey={draftKey}
+                placeholder="Best draft pick"
+                align="right"
+                onChange={(value) => patchMeta({ bestPick: value })}
+              />
+              <MetaDraftInput
+                label="Worst pick"
+                saved={meta?.worstPick}
+                draftKey={draftKey}
+                placeholder="Worst draft pick"
+                align="right"
+                onChange={(value) => patchMeta({ worstPick: value })}
+              />
+            </>
+          ) : (
+            <>
+              <span className="team-rank-card__player-label">Best pick</span>
+              <span className="team-rank-card__player-name">
+                {meta?.bestPick || '—'}
+              </span>
+              <span className="team-rank-card__player-label">Worst pick</span>
+              <span className="team-rank-card__player-name">
+                {meta?.worstPick || '—'}
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -343,47 +445,146 @@ function MidseasonMiddle({ meta, stats, isAdmin, onMetaChange, draftKey }) {
   );
 }
 
-function PlayoffMiddle({ meta }) {
+function playoffChancesLabel(powerRank) {
+  return powerRank != null && powerRank <= 6
+    ? 'Championship Chances'
+    : 'Wing Chances';
+}
+
+function PlayoffMiddle({
+  meta,
+  stats,
+  isAdmin,
+  onMetaChange,
+  draftKey,
+  powerRank
+}) {
   const performanceLines = meta?.performanceLines || [];
+  const h2hRecord = stats?.h2hRecord || meta?.h2hRecord;
+  const medianRecord = stats?.medianRecord || meta?.medianRecord;
+  const pointsScored = stats?.pointsScored || meta?.pointsScored;
+  const chancesLabel = playoffChancesLabel(powerRank);
+  const isChampionship = chancesLabel === 'Championship Chances';
+
   return (
     <div className="team-rank-card__middle is-single">
       <div className="team-rank-card__matchup">
         <span className="team-rank-card__week-badge">Playoff Predictor</span>
-        <MetaLine label="H2H:" value={meta?.h2hRecord} />
-        <MetaLine label="Median:" value={meta?.medianRecord} />
-        <ResultLine label="Points:" value={meta?.pointsScored} />
+        <MetaLine label="H2H:" value={h2hRecord} />
+        <MetaLine label="Median:" value={medianRecord} />
+        <ResultLine label="Points:" value={pointsScored} />
         {performanceLines.map((line) => (
           <ResultLine key={line} value={line} />
         ))}
-        {meta?.chances ? (
-          <p className="team-rank-card__median">{meta.chances}</p>
+        {isAdmin ? (
+          <MetaDraftInput
+            label={chancesLabel}
+            saved={meta?.chances}
+            draftKey={draftKey}
+            placeholder={
+              isChampionship
+                ? 'e.g. 35% to win it all'
+                : 'e.g. favorite for the wings'
+            }
+            multiline
+            rows={2}
+            onChange={(value) => onMetaChange?.({ chances: value })}
+          />
+        ) : meta?.chances ? (
+          <p className="team-rank-card__median">
+            {chancesLabel}: {meta.chances}
+          </p>
         ) : null}
       </div>
     </div>
   );
 }
 
-function RetrospectiveMiddle({ meta }) {
+function RetrospectiveMiddle({
+  meta,
+  stats,
+  isAdmin,
+  onMetaChange,
+  draftKey
+}) {
+  const record = stats?.recordLabel || meta?.record;
+  const medianWins = stats?.medianWins || meta?.medianWins;
+
+  function patchMeta(patch) {
+    onMetaChange?.(patch);
+  }
+
   return (
     <div className="team-rank-card__middle">
       <div className="team-rank-card__matchup">
         <span className="team-rank-card__week-badge">Season Retrospective</span>
-        <MetaLine label="Record:" value={meta?.record} />
-        <MetaLine label="Median wins:" value={meta?.medianWins} />
-        <MetaLine label="Playoffs:" value={meta?.playoffPerformance} />
-        <MetaLine label="Draft rank:" value={meta?.draftRecapRanking} />
-        <MetaLine label="Mid-season:" value={meta?.midSeasonRanking} />
+        <MetaLine label="Record:" value={record} />
+        <MetaLine label="Median wins:" value={medianWins} />
+        {isAdmin ? (
+          <>
+            <MetaDraftInput
+              label="Playoffs"
+              saved={meta?.playoffPerformance}
+              draftKey={draftKey}
+              placeholder="e.g. 1st in Playoffs 🥇"
+              onChange={(value) => patchMeta({ playoffPerformance: value })}
+            />
+            <MetaDraftInput
+              label="Draft rank"
+              saved={meta?.draftRecapRanking}
+              draftKey={draftKey}
+              placeholder="e.g. 4th"
+              onChange={(value) => patchMeta({ draftRecapRanking: value })}
+            />
+            <MetaDraftInput
+              label="Mid-season"
+              saved={meta?.midSeasonRanking}
+              draftKey={draftKey}
+              placeholder="e.g. 2nd"
+              onChange={(value) => patchMeta({ midSeasonRanking: value })}
+            />
+          </>
+        ) : (
+          <>
+            <MetaLine label="Playoffs:" value={meta?.playoffPerformance} />
+            <MetaLine label="Draft rank:" value={meta?.draftRecapRanking} />
+            <MetaLine label="Mid-season:" value={meta?.midSeasonRanking} />
+          </>
+        )}
       </div>
       <div className="team-rank-card__player team-rank-card__draft-picks">
         <div>
-          <span className="team-rank-card__player-label">Best player</span>
-          <span className="team-rank-card__player-name">
-            {meta?.bestPlayer || '—'}
-          </span>
-          <span className="team-rank-card__player-label">Worst player</span>
-          <span className="team-rank-card__player-name">
-            {meta?.worstPlayer || '—'}
-          </span>
+          {isAdmin ? (
+            <>
+              <MetaDraftInput
+                label="Best player"
+                saved={meta?.bestPlayer}
+                draftKey={draftKey}
+                placeholder="Best player"
+                align="right"
+                onChange={(value) => patchMeta({ bestPlayer: value })}
+              />
+              <MetaDraftInput
+                label="Worst player"
+                saved={meta?.worstPlayer}
+                draftKey={draftKey}
+                placeholder="Worst player"
+                align="right"
+                onChange={(value) => patchMeta({ worstPlayer: value })}
+              />
+            </>
+          ) : (
+            <>
+              <span className="team-rank-card__player-label">Best player</span>
+              <span className="team-rank-card__player-name">
+                {meta?.bestPlayer || '—'}
+              </span>
+              <span className="team-rank-card__player-label">Worst player</span>
+              <span className="team-rank-card__player-name">
+                {meta?.worstPlayer || '—'}
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -522,12 +723,21 @@ function EditionMiddle({
   live,
   isAdmin,
   onMetaChange,
-  draftKey
+  draftKey,
+  powerRank
 }) {
   const [imgFailed, setImgFailed] = useState(false);
 
   if (editionType === EDITION_TYPES.draft) {
-    return <DraftMiddle meta={meta} badge={editionLabel} />;
+    return (
+      <DraftMiddle
+        meta={meta}
+        badge={editionLabel}
+        isAdmin={isAdmin}
+        onMetaChange={onMetaChange}
+        draftKey={draftKey}
+      />
+    );
   }
   if (editionType === EDITION_TYPES.midseason) {
     return (
@@ -541,10 +751,27 @@ function EditionMiddle({
     );
   }
   if (editionType === EDITION_TYPES.playoff) {
-    return <PlayoffMiddle meta={meta} />;
+    return (
+      <PlayoffMiddle
+        meta={meta}
+        stats={stats}
+        isAdmin={isAdmin}
+        onMetaChange={onMetaChange}
+        draftKey={draftKey}
+        powerRank={powerRank}
+      />
+    );
   }
   if (editionType === EDITION_TYPES.retrospective) {
-    return <RetrospectiveMiddle meta={meta} />;
+    return (
+      <RetrospectiveMiddle
+        meta={meta}
+        stats={stats}
+        isAdmin={isAdmin}
+        onMetaChange={onMetaChange}
+        draftKey={draftKey}
+      />
+    );
   }
   if (live && editionType === EDITION_TYPES.week) {
     return (
@@ -601,7 +828,9 @@ export default function TeamRankCard({
   const showRecord =
     live &&
     (editionType === EDITION_TYPES.week ||
-      editionType === EDITION_TYPES.midseason)
+      editionType === EDITION_TYPES.midseason ||
+      editionType === EDITION_TYPES.playoff ||
+      editionType === EDITION_TYPES.retrospective)
       ? true
       : Boolean(recordLabel || teamMeta?.record);
 
@@ -654,6 +883,7 @@ export default function TeamRankCard({
             : undefined
         }
         draftKey={draftKey}
+        powerRank={powerRank}
       />
 
       <div className="team-rank-card__bottom">

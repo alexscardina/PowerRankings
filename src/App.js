@@ -13,7 +13,7 @@ import {
   scoringPeriodForEdition,
   seasonStamp,
   usesEspnMatchup,
-  usesEspnMidseason
+  usesEspnSeasonStats
 } from './editionUtils';
 import './App.css';
 
@@ -175,7 +175,7 @@ export default function App() {
     if (usesEspnMatchup(selectedEdition, live)) {
       return buildTeamCardStats(leagueData, espnTeams, week, teamNames);
     }
-    if (usesEspnMidseason(selectedEdition, live)) {
+    if (usesEspnSeasonStats(selectedEdition, live)) {
       return buildMidseasonCardStats(leagueData, espnTeams, week);
     }
     return null;
@@ -457,7 +457,7 @@ export default function App() {
     }, 500);
   }
 
-  function snapshotMidseasonMeta(edition, statsByTeamId) {
+  function snapshotEspnMeta(edition, statsByTeamId) {
     const next = { ...(edition?.meta || {}) };
     for (const [teamId, stats] of Object.entries(statsByTeamId || {})) {
       const key = String(teamId);
@@ -465,6 +465,7 @@ export default function App() {
         ...(next[key] || {}),
         h2hRecord: stats.h2hRecord,
         medianRecord: stats.medianRecord,
+        medianWins: stats.medianWins,
         pointsScored: stats.pointsScored,
         record: stats.recordLabel
       };
@@ -551,8 +552,8 @@ export default function App() {
         ? { ...edition.names, ...snapshotTeamNames() }
         : edition.names || {};
       const meta =
-        edition.type === EDITION_TYPES.midseason && cardStats?.byTeamId
-          ? snapshotMidseasonMeta(edition, cardStats.byTeamId)
+        usesEspnSeasonStats(edition, live) && cardStats?.byTeamId
+          ? snapshotEspnMeta(edition, cardStats.byTeamId)
           : edition.meta;
       await saveRankings({
         editionId: selectedEditionId,
@@ -728,7 +729,10 @@ export default function App() {
           teamNames={teamNames}
           onBlurbChange={handleBlurbChange}
           onMetaChange={
-            selectedEdition.type === EDITION_TYPES.midseason
+            selectedEdition.type === EDITION_TYPES.midseason ||
+            selectedEdition.type === EDITION_TYPES.draft ||
+            selectedEdition.type === EDITION_TYPES.playoff ||
+            selectedEdition.type === EDITION_TYPES.retrospective
               ? handleMetaChange
               : undefined
           }

@@ -363,6 +363,7 @@ export function buildMidseasonCardStats(leagueData, teams, weekOverride) {
       week,
       h2hRecord: formatRecord(h2hRecord),
       medianRecord: formatRecord(medianRecord),
+      medianWins: String(medianRecord.wins),
       pointsScored: formatPointsScored(place, total, weeksPlayed, teams.length),
       scoringPlace: place,
       record: combined,

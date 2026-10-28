@@ -26,6 +26,15 @@ export function usesEspnMidseason(edition, live) {
   return Boolean(live && edition?.type === EDITION_TYPES.midseason);
 }
 
+export function usesEspnSeasonStats(edition, live) {
+  return Boolean(
+    live &&
+      (edition?.type === EDITION_TYPES.midseason ||
+        edition?.type === EDITION_TYPES.playoff ||
+        edition?.type === EDITION_TYPES.retrospective)
+  );
+}
+
 export function usesDraftMiddle(edition) {
   return edition?.type === EDITION_TYPES.draft;
 }
