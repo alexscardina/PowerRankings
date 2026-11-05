@@ -157,6 +157,12 @@ body {
   color: var(--text);
 }
 
+.admin-panel button.danger {
+  background: transparent;
+  color: #ffb4b4;
+  border-color: #ffb4b4;
+}
+
 .admin-panel__status {
   width: 100%;
   margin: 0;
@@ -210,6 +216,10 @@ body {
 
 .week-intro-edit__input::placeholder {
   color: var(--muted-on-dark);
+}
+
+.week-intro-edit__title {
+  resize: none;
 }
 
 .week-nav__btn {

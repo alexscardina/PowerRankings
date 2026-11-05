@@ -261,11 +261,13 @@ function buildNextRankings(current, payload = {}) {
     intro,
     label,
     week,
-    activeEditionId
+    activeEditionId,
+    remove
   } = payload;
 
   if (
     !create &&
+    !remove &&
     editionId == null &&
     activeEditionId === undefined &&
     teamIds === undefined &&
@@ -273,14 +275,25 @@ function buildNextRankings(current, payload = {}) {
     names === undefined &&
     owners === undefined &&
     meta === undefined &&
-    intro === undefined
+    intro === undefined &&
+    label === undefined
   ) {
     throw new Error("Nothing to save");
   }
 
   let targetId = editionId;
 
-  if (create) {
+  if (remove) {
+    if (!targetId || !bucket.editions[targetId]) {
+      throw new Error(`Edition ${targetId || ""} does not exist`);
+    }
+    const active = bucket.editions[bucket.activeEditionId];
+    const activeOrder = Number.isFinite(active?.order) ? active.order : -1;
+    if (!(bucket.editions[targetId].order > activeOrder)) {
+      throw new Error("Only unpublished drafts can be deleted");
+    }
+    delete bucket.editions[targetId];
+  } else if (create) {
     const editionType = EDITION_TYPES[type] || EDITION_TYPES.week;
     let editionWeek = week != null ? Number(week) : null;
     if (editionType === EDITION_TYPES.week && editionWeek == null) {
@@ -317,12 +330,15 @@ function buildNextRankings(current, payload = {}) {
       intro: intro !== undefined ? intro : ""
     });
   } else if (targetId) {
-    const existing = bucket.editions[targetId] || emptyEdition(EDITION_TYPES.week);
+    const existing = bucket.editions[targetId];
+    if (!existing) {
+      throw new Error(`Edition ${targetId} does not exist`);
+    }
     bucket.editions[targetId] = normalizeEdition({
       ...existing,
       type: type ? EDITION_TYPES[type] || existing.type : existing.type,
       week: week !== undefined ? week : existing.week,
-      label: label || existing.label,
+      label: label !== undefined ? label : existing.label,
       teamIds: Array.isArray(teamIds) ? teamIds : existing.teamIds,
       blurbs: blurbs !== undefined ? asObject(blurbs) : existing.blurbs,
       names: names !== undefined ? asObject(names) : existing.names,

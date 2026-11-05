@@ -35,9 +35,20 @@ function mergeRemoteEditions(remote, local) {
       names: current.names,
       owners: current.owners,
       meta: current.meta,
-      intro: current.intro
+      intro: current.intro,
+      label: current.label
     };
   });
+}
+
+function archivalTeams(edition) {
+  const names = edition.names || {};
+  const owners = edition.owners || {};
+  return (edition.teamIds || []).map((id) => ({
+    id,
+    name: names[String(id)] || names[id] || String(id),
+    owner: owners[String(id)] || owners[id] || 'Unknown'
+  }));
 }
 
 function teamsFromEdition(edition, espnTeams) {
@@ -47,18 +58,20 @@ function teamsFromEdition(edition, espnTeams) {
   const ids = edition.teamIds || [];
 
   if (espnTeams?.length) {
-    return orderTeams(espnTeams, ids).map((team) => ({
-      ...team,
-      name: names[String(team.id)] || names[team.id] || team.name,
-      owner: owners[String(team.id)] || owners[team.id] || team.owner
-    }));
+    const espnIds = new Set(espnTeams.map((team) => String(team.id)));
+    const overlap = ids.some((id) => espnIds.has(String(id)));
+    // Past seasons use slug ids. Don't substitute this year's ESPN teams
+    // when none of the edition's ids belong to the live league.
+    if (overlap) {
+      return orderTeams(espnTeams, ids).map((team) => ({
+        ...team,
+        name: names[String(team.id)] || names[team.id] || team.name,
+        owner: owners[String(team.id)] || owners[team.id] || team.owner
+      }));
+    }
   }
 
-  return ids.map((id) => ({
-    id,
-    name: names[String(id)] || names[id] || String(id),
-    owner: owners[String(id)] || owners[id] || 'Unknown'
-  }));
+  return archivalTeams(edition);
 }
 
 export default function App() {
@@ -84,8 +97,11 @@ export default function App() {
   const blurbTimer = useRef(null);
   const introTimer = useRef(null);
   const metaTimer = useRef(null);
+  const labelTimer = useRef(null);
   const editionsRef = useRef([]);
   const selectedEditionRef = useRef(null);
+  const selectedYearRef = useRef(null);
+  const editionsYearRef = useRef(null);
   const savesInFlightRef = useRef(0);
   const liveRef = useRef(true);
   const activeEditionIdRef = useRef(null);
@@ -96,19 +112,25 @@ export default function App() {
         blurbTimer.current ||
           introTimer.current ||
           metaTimer.current ||
+          labelTimer.current ||
           savesInFlightRef.current > 0
       ),
     []
   );
 
   const applyRemoteEditions = useCallback(
-    (remote, { force = false } = {}) => {
+    (remote, { force = false, year = null } = {}) => {
       setEditions((prev) => {
+        const sameYear =
+          year == null ||
+          editionsYearRef.current == null ||
+          Number(year) === Number(editionsYearRef.current);
         const next =
-          !force && hasUnsavedEdits()
+          sameYear && !force && hasUnsavedEdits()
             ? mergeRemoteEditions(remote, prev)
             : remote || [];
         editionsRef.current = next;
+        if (year != null) editionsYearRef.current = Number(year);
         return next;
       });
     },
@@ -157,9 +179,14 @@ export default function App() {
   );
   const blurbs = selectedEdition?.blurbs || {};
   const teamMeta = selectedEdition?.meta || {};
+  const editionResetKey = `${selectedYear || ''}:${selectedEditionId || ''}`;
   const [draftIntro, setDraftIntro] = useDraftField(
     selectedEdition?.intro || '',
-    selectedEditionId
+    editionResetKey
+  );
+  const [draftTitle, setDraftTitle] = useDraftField(
+    selectedEdition?.label || '',
+    editionResetKey
   );
 
   const cardStats = useMemo(() => {
@@ -204,6 +231,10 @@ export default function App() {
   }, [selectedEditionId]);
 
   useEffect(() => {
+    selectedYearRef.current = selectedYear;
+  }, [selectedYear]);
+
+  useEffect(() => {
     liveRef.current = live;
   }, [live]);
 
@@ -223,7 +254,7 @@ export default function App() {
       setSelectedYear(year);
       setLive(isLive);
       setActiveEditionId(activeId);
-      applyRemoteEditions(nextEditions);
+      applyRemoteEditions(nextEditions, { year });
 
       setSelectedEditionId((prev) => {
         if (prev && nextEditions.some((e) => e.id === prev)) return prev;
@@ -296,9 +327,15 @@ export default function App() {
             throw new Error(message);
           }
 
-          const rankings = await rankingsRes.json();
-          if (cancelled) return;
-          const applied = await applyRankingsPayload(rankings);
+        const rankings = await rankingsRes.json();
+        if (cancelled) return;
+        if (
+          selectedYearRef.current != null &&
+          Number(rankings.year) !== Number(selectedYearRef.current)
+        ) {
+          return;
+        }
+        const applied = await applyRankingsPayload(rankings);
           isLive = applied.isLive;
           nextEditions = applied.nextEditions;
           activeId = applied.activeId;
@@ -361,7 +398,10 @@ export default function App() {
 
       const data = await res.json();
       if (payload.create) {
-        applyRemoteEditions(data.editions || [], { force: true });
+        applyRemoteEditions(data.editions || [], {
+          force: true,
+          year: selectedYearRef.current
+        });
       }
       setActiveEditionId(data.activeEditionId);
       setLive(Boolean(data.live));
@@ -386,6 +426,9 @@ export default function App() {
         };
         if (patch.intro !== undefined) {
           updated.intro = patch.intro;
+        }
+        if (patch.label !== undefined) {
+          updated.label = patch.label;
         }
         return updated;
       });
@@ -443,18 +486,39 @@ export default function App() {
     setShowTypePicker(false);
   }
 
+  function queueEditionSave(timerRef, run) {
+    const yearAtEdit = selectedYearRef.current;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      if (Number(selectedYearRef.current) !== Number(yearAtEdit)) return;
+      setSaveError(null);
+      run();
+    }, 500);
+  }
+
+  function handleLabelChange(value) {
+    const editionId = selectedEditionRef.current;
+    updateEditionLocal(editionId, { label: value });
+    queueEditionSave(labelTimer, () => {
+      const edition = editionsRef.current.find((e) => e.id === editionId);
+      saveRankings({
+        editionId,
+        label: typeof edition?.label === 'string' ? edition.label : value
+      }).catch((err) => setSaveError(err.message));
+    });
+  }
+
   function handleIntroChange(value) {
     const editionId = selectedEditionRef.current;
     updateEditionLocal(editionId, { intro: value });
-    if (introTimer.current) clearTimeout(introTimer.current);
-    introTimer.current = setTimeout(() => {
-      setSaveError(null);
+    queueEditionSave(introTimer, () => {
       const edition = editionsRef.current.find((e) => e.id === editionId);
       saveRankings({
         editionId,
         intro: typeof edition?.intro === 'string' ? edition.intro : value
       }).catch((err) => setSaveError(err.message));
-    }, 500);
+    });
   }
 
   function snapshotEspnMeta(edition, statsByTeamId) {
@@ -487,15 +551,13 @@ export default function App() {
       }
     };
     updateEditionLocal(editionId, { meta: nextMeta });
-    if (metaTimer.current) clearTimeout(metaTimer.current);
-    metaTimer.current = setTimeout(() => {
-      setSaveError(null);
+    queueEditionSave(metaTimer, () => {
       const latest = editionsRef.current.find((e) => e.id === editionId);
       saveRankings({
         editionId,
         meta: latest?.meta || nextMeta
       }).catch((err) => setSaveError(err.message));
-    }, 500);
+    });
   }
 
   function handleBlurbChange(teamId, value) {
@@ -505,15 +567,13 @@ export default function App() {
     };
     const nextBlurbs = { ...edition.blurbs, [String(teamId)]: value };
     updateEditionLocal(editionId, { blurbs: nextBlurbs });
-    if (blurbTimer.current) clearTimeout(blurbTimer.current);
-    blurbTimer.current = setTimeout(() => {
-      setSaveError(null);
+    queueEditionSave(blurbTimer, () => {
       const latest = editionsRef.current.find((e) => e.id === editionId);
       saveRankings({
         editionId,
         blurbs: latest?.blurbs || nextBlurbs
       }).catch((err) => setSaveError(err.message));
-    }, 500);
+    });
   }
 
   async function handleCreateEdition(type) {
@@ -537,6 +597,38 @@ export default function App() {
       if (created) {
         setSelectedEditionId(created.id);
       }
+    } catch (err) {
+      setSaveError(err.message);
+    }
+  }
+
+  function clearEditionTimers() {
+    for (const timer of [blurbTimer, introTimer, metaTimer, labelTimer]) {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+    }
+  }
+
+  async function handleDeleteEdition() {
+    if (!selectedEditionId || !isUnpublished) return;
+    const edition = editionsRef.current.find((e) => e.id === selectedEditionId);
+    if (!edition) return;
+    const confirmed = window.confirm(`Delete “${edition.label || 'this draft'}”?`);
+    if (!confirmed) return;
+
+    const editionId = edition.id;
+    clearEditionTimers();
+    setSaveError(null);
+    try {
+      await saveRankings({ remove: true, editionId });
+      setEditions((prev) => {
+        const next = prev.filter((item) => item.id !== editionId);
+        editionsRef.current = next;
+        return next;
+      });
+      setSelectedEditionId(activeEditionIdRef.current);
     } catch (err) {
       setSaveError(err.message);
     }
@@ -576,6 +668,10 @@ export default function App() {
     setShowTypePicker(false);
     setSelectedEditionId(null);
     setSelectedYear(year);
+    selectedYearRef.current = year;
+    setLive(false);
+    setEspnTeams([]);
+    setLeagueData(null);
   }
 
   return (
@@ -622,6 +718,15 @@ export default function App() {
                 {isUnpublished && (
                   <button type="button" onClick={handleReleaseEdition}>
                     Release
+                  </button>
+                )}
+                {isUnpublished && (
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={handleDeleteEdition}
+                  >
+                    Delete draft
                   </button>
                 )}
                 <button type="button" className="secondary" onClick={handleLock}>
@@ -700,6 +805,20 @@ export default function App() {
 
       {loading && <p>Loading…</p>}
       {error && <p>Error: {error}</p>}
+      {!loading && !error && isAdmin && selectedEdition && (
+        <label className="week-intro-edit">
+          <span className="week-intro-edit__label">Title</span>
+          <input
+            className="week-intro-edit__input week-intro-edit__title"
+            value={draftTitle}
+            placeholder="Week title"
+            onChange={(e) => {
+              setDraftTitle(e.target.value);
+              handleLabelChange(e.target.value);
+            }}
+          />
+        </label>
+      )}
       {!loading && !error && isAdmin && (
         <label className="week-intro-edit">
           <span className="week-intro-edit__label">Edition intro</span>
@@ -720,6 +839,8 @@ export default function App() {
       )}
       {!loading && !error && selectedEdition && (
         <PowerRankingsList
+          key={`${selectedYear}:${selectedEdition.id}`}
+          seasonKey={String(selectedYear || '')}
           teams={teams}
           isAdmin={isAdmin}
           onReorder={handleReorder}

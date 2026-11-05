@@ -41,7 +41,8 @@ function editionIdFor(type, week) {
 }
 
 function defaultLabel(type, week, customLabel) {
-  if (customLabel) return customLabel;
+  const custom = typeof customLabel === "string" ? customLabel.trim() : "";
+  if (custom) return custom;
   if (type === EDITION_TYPES.week) return `Week ${week}`;
   return TYPE_LABELS[type] || type;
 }
@@ -121,14 +122,31 @@ function sortedEditionEntries(editions) {
   });
 }
 
-function nextWeekNumber(editions) {
-  let max = 0;
-  for (const edition of Object.values(editions || {})) {
-    if (edition.type === EDITION_TYPES.week && Number.isFinite(edition.week)) {
-      max = Math.max(max, edition.week);
-    }
+function occupiedWeek(edition) {
+  if (!edition) return null;
+  if (edition.type === EDITION_TYPES.midseason) {
+    const week = Number(edition.week);
+    return Number.isFinite(week) ? week : 7;
   }
-  return max + 1;
+  if (edition.type === EDITION_TYPES.playoff) {
+    const week = Number(edition.week);
+    return Number.isFinite(week) ? week : 14;
+  }
+  if (edition.type === EDITION_TYPES.week && Number.isFinite(Number(edition.week))) {
+    return Number(edition.week);
+  }
+  return null;
+}
+
+function nextWeekNumber(editions) {
+  const taken = new Set();
+  for (const edition of Object.values(editions || {})) {
+    const week = occupiedWeek(edition);
+    if (week != null) taken.add(week);
+  }
+  let next = 1;
+  while (taken.has(next)) next += 1;
+  return next;
 }
 
 function nextOrder(editions) {

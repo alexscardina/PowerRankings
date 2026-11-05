@@ -30,7 +30,8 @@ export default function PowerRankingsList({
   previousTeamIds,
   editionType = EDITION_TYPES.week,
   editionLabel = '',
-  live = true
+  live = true,
+  seasonKey = ''
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -82,6 +83,7 @@ export default function PowerRankingsList({
               teamMeta={teamMeta[String(team.id)] || teamMeta[team.id] || null}
               editionType={editionType}
               editionLabel={editionLabel}
+              seasonKey={seasonKey}
               live={live}
               recordLabel={
                 cardStats?.byTeamId?.[team.id]?.recordLabel ||

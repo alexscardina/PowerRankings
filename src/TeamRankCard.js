@@ -798,6 +798,7 @@ export default function TeamRankCard({
   teamMeta = null,
   editionType = EDITION_TYPES.week,
   editionLabel = '',
+  seasonKey = '',
   live = true,
   recordLabel = null,
   blurb,
@@ -822,7 +823,7 @@ export default function TeamRankCard({
     opacity: isDragging ? 0.85 : 1
   };
 
-  const draftKey = `${editionType}:${editionLabel}:${team.id}`;
+  const draftKey = `${seasonKey}:${editionType}:${editionLabel}:${team.id}`;
   const [draftBlurb, setDraftBlurb] = useDraftField(blurb || '', draftKey);
 
   const showRecord =

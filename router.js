@@ -110,7 +110,8 @@ router.put("/rankings", async (req, res) => {
     intro,
     label,
     week,
-    activeEditionId
+    activeEditionId,
+    remove
   } = req.body || {};
 
   if (year !== undefined && (typeof year !== "number" || !Number.isFinite(year))) {
@@ -138,6 +139,7 @@ router.put("/rankings", async (req, res) => {
     year === undefined &&
     editionId === undefined &&
     !create &&
+    !remove &&
     teamIds === undefined &&
     blurbs === undefined &&
     names === undefined &&
@@ -163,7 +165,8 @@ router.put("/rankings", async (req, res) => {
       intro,
       label,
       week,
-      activeEditionId
+      activeEditionId,
+      remove: Boolean(remove)
     });
 
     const y = year ?? next.currentYear;
