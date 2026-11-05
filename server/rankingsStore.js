@@ -8,6 +8,7 @@ const {
   defaultLabel,
   normalizeEdition,
   sortedEditionEntries,
+  stampPublished,
   nextWeekNumber,
   nextOrder,
   migrateLegacyYear
@@ -43,11 +44,17 @@ function normalizeYear(yearKey, value) {
     const sorted = sortedEditionEntries(editions);
     activeEditionId = sorted.length ? sorted[sorted.length - 1][0] : null;
   }
+  stampPublished(editions, activeEditionId);
+
+  const deletedEditionIds = Array.isArray(value?.deletedEditionIds)
+    ? [...new Set(value.deletedEditionIds.map((id) => String(id)).filter(Boolean))]
+    : [];
 
   return {
     live: value?.live != null ? Boolean(value.live) : yearNum >= 2026,
     activeEditionId,
-    editions
+    editions,
+    deletedEditionIds
   };
 }
 
@@ -117,7 +124,11 @@ function mergeEdition(storedEdition, seedEdition) {
       intro:
         typeof storedEdition.intro === "string" && storedEdition.intro.trim()
           ? storedEdition.intro
-          : seedEdition.intro || ""
+          : seedEdition.intro || "",
+      published:
+        typeof storedEdition.published === "boolean"
+          ? storedEdition.published
+          : seedEdition.published
     },
     storedEdition.id
   );
@@ -135,9 +146,14 @@ function mergeMissingSeed(stored) {
 
     const storedYear = years[yearKey];
     const editions = { ...storedYear.editions };
+    const deletedEditionIds = new Set(storedYear.deletedEditionIds || []);
 
     for (const [editionId, seedEdition] of Object.entries(seedYear.editions)) {
+      if (deletedEditionIds.has(editionId)) continue;
       editions[editionId] = mergeEdition(editions[editionId], seedEdition);
+    }
+    for (const editionId of deletedEditionIds) {
+      delete editions[editionId];
     }
 
     // Prefer an explicit stored active edition; otherwise keep seed's
@@ -147,6 +163,7 @@ function mergeMissingSeed(stored) {
         : seedYear.activeEditionId && editions[seedYear.activeEditionId]
           ? seedYear.activeEditionId
           : storedYear.activeEditionId;
+    stampPublished(editions, activeEditionId);
 
     years[yearKey] = {
       live:
@@ -154,7 +171,8 @@ function mergeMissingSeed(stored) {
           ? Boolean(storedYear.live)
           : Boolean(seedYear.live),
       activeEditionId,
-      editions
+      editions,
+      deletedEditionIds: [...deletedEditionIds]
     };
   }
 
@@ -246,7 +264,8 @@ function buildNextRankings(current, payload = {}) {
   const bucket = {
     live: years[yearKey]?.live ?? year >= 2026,
     activeEditionId: years[yearKey]?.activeEditionId ?? null,
-    editions: { ...(years[yearKey]?.editions || {}) }
+    editions: { ...(years[yearKey]?.editions || {}) },
+    deletedEditionIds: [...(years[yearKey]?.deletedEditionIds || [])]
   };
 
   const {
@@ -287,12 +306,30 @@ function buildNextRankings(current, payload = {}) {
     if (!targetId || !bucket.editions[targetId]) {
       throw new Error(`Edition ${targetId || ""} does not exist`);
     }
-    const active = bucket.editions[bucket.activeEditionId];
-    const activeOrder = Number.isFinite(active?.order) ? active.order : -1;
-    if (!(bucket.editions[targetId].order > activeOrder)) {
-      throw new Error("Only unpublished drafts can be deleted");
+    const existing = bucket.editions[targetId];
+    const isDraft = existing.published === false;
+    if (!isDraft && existing.type !== EDITION_TYPES.week) {
+      throw new Error("Only drafts and weekly rankings can be deleted");
     }
+    const wasActive = bucket.activeEditionId === targetId;
     delete bucket.editions[targetId];
+    if (!bucket.deletedEditionIds.includes(targetId)) {
+      bucket.deletedEditionIds.push(targetId);
+    }
+    if (wasActive) {
+      const sorted = sortedEditionEntries(bucket.editions);
+      const previous = [...sorted]
+        .reverse()
+        .find(
+          ([, edition]) =>
+            edition.published !== false && edition.order < existing.order
+        );
+      bucket.activeEditionId = previous
+        ? previous[0]
+        : sorted.length
+          ? sorted[sorted.length - 1][0]
+          : null;
+    }
   } else if (create) {
     const editionType = EDITION_TYPES[type] || EDITION_TYPES.week;
     let editionWeek = week != null ? Number(week) : null;
@@ -310,6 +347,9 @@ function buildNextRankings(current, payload = {}) {
     if (bucket.editions[targetId] && !payload.force) {
       throw new Error(`Edition ${targetId} already exists`);
     }
+    bucket.deletedEditionIds = bucket.deletedEditionIds.filter(
+      (id) => id !== targetId
+    );
 
     const prevId = bucket.activeEditionId;
     const prev = bucket.editions[prevId] || emptyEdition(EDITION_TYPES.week);
@@ -327,7 +367,8 @@ function buildNextRankings(current, payload = {}) {
       names: names !== undefined ? asObject(names) : asObject(prev.names),
       owners: owners !== undefined ? asObject(owners) : asObject(prev.owners),
       meta: meta !== undefined ? meta : {},
-      intro: intro !== undefined ? intro : ""
+      intro: intro !== undefined ? intro : "",
+      published: false
     });
   } else if (targetId) {
     const existing = bucket.editions[targetId];
@@ -345,7 +386,8 @@ function buildNextRankings(current, payload = {}) {
       owners: owners !== undefined ? asObject(owners) : existing.owners,
       meta: meta !== undefined ? meta : existing.meta,
       intro: intro !== undefined ? intro : existing.intro,
-      order: existing.order
+      order: existing.order,
+      published: existing.published
     });
   }
 
@@ -355,6 +397,12 @@ function buildNextRankings(current, payload = {}) {
     }
     bucket.activeEditionId =
       activeEditionId == null ? bucket.activeEditionId : String(activeEditionId);
+    if (bucket.activeEditionId && bucket.editions[bucket.activeEditionId]) {
+      bucket.editions[bucket.activeEditionId] = {
+        ...bucket.editions[bucket.activeEditionId],
+        published: true
+      };
+    }
   }
 
   years[yearKey] = bucket;

@@ -58,7 +58,8 @@ function emptyEdition(type, { week, order, label } = {}) {
     names: {},
     owners: {},
     meta: {},
-    intro: ""
+    intro: "",
+    published: false
   };
 }
 
@@ -105,6 +106,10 @@ function normalizeEdition(value, fallbackId) {
     meta: normalizeMeta(value?.meta || value?.draft)
   };
 
+  if (typeof value?.published === "boolean") {
+    edition.published = value.published;
+  }
+
   if (typeof value?.intro === "string" && value.intro.trim()) {
     edition.intro = value.intro;
   } else {
@@ -112,6 +117,19 @@ function normalizeEdition(value, fallbackId) {
   }
 
   return edition;
+}
+
+function stampPublished(editions, activeEditionId) {
+  const active = editions?.[activeEditionId];
+  const activeOrder = Number.isFinite(Number(active?.order))
+    ? Number(active.order)
+    : -1;
+  for (const edition of Object.values(editions || {})) {
+    if (typeof edition.published !== "boolean") {
+      edition.published = Number(edition.order) <= activeOrder;
+    }
+  }
+  return editions;
 }
 
 function sortedEditionEntries(editions) {
@@ -218,6 +236,7 @@ module.exports = {
   emptyEdition,
   normalizeEdition,
   normalizeMeta,
+  stampPublished,
   sortedEditionEntries,
   nextWeekNumber,
   nextOrder,

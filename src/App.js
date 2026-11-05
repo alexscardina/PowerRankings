@@ -145,31 +145,32 @@ export default function App() {
     [editions, selectedEditionId]
   );
 
-  const activeOrder = useMemo(() => {
-    const active = editions.find((e) => e.id === activeEditionId);
-    return active?.order ?? -1;
-  }, [editions, activeEditionId]);
-
   const visibleEditions = useMemo(() => {
-    if (isAdmin) {
-      return [...editions].sort((a, b) => a.order - b.order);
-    }
-    return editions
-      .filter((e) => e.order <= activeOrder)
-      .sort((a, b) => a.order - b.order);
-  }, [editions, activeOrder, isAdmin]);
+    const sorted = [...editions].sort((a, b) => a.order - b.order);
+    if (isAdmin) return sorted;
+    return sorted.filter((edition) => edition.published !== false);
+  }, [editions, isAdmin]);
 
   const isUnpublished =
+    isAdmin && selectedEdition != null && selectedEdition.published === false;
+
+  const canDeleteSelected =
     isAdmin &&
     selectedEdition != null &&
-    selectedEdition.order > activeOrder;
+    (isUnpublished || selectedEdition.type === EDITION_TYPES.week);
 
   const teams = useMemo(
     () => teamsFromEdition(selectedEdition, live ? espnTeams : null),
     [selectedEdition, live, espnTeams]
   );
 
-  const prevId = previousEditionId(editions, selectedEditionId);
+  const prevId = previousEditionId(
+    editions.filter(
+      (edition) =>
+        edition.published !== false || edition.id === selectedEditionId
+    ),
+    selectedEditionId
+  );
   const previousTeamIds =
     editions.find((e) => e.id === prevId)?.teamIds || [];
 
@@ -430,6 +431,9 @@ export default function App() {
         if (patch.label !== undefined) {
           updated.label = patch.label;
         }
+        if (patch.published !== undefined) {
+          updated.published = patch.published;
+        }
         return updated;
       });
       editionsRef.current = next;
@@ -612,23 +616,35 @@ export default function App() {
   }
 
   async function handleDeleteEdition() {
-    if (!selectedEditionId || !isUnpublished) return;
+    if (!selectedEditionId || !canDeleteSelected) return;
     const edition = editionsRef.current.find((e) => e.id === selectedEditionId);
     if (!edition) return;
-    const confirmed = window.confirm(`Delete “${edition.label || 'this draft'}”?`);
+    const label = edition.label || 'this rankings tab';
+    const confirmed = window.confirm(
+      isUnpublished
+        ? `Delete “${label}”?`
+        : `Delete “${label}”? It will be removed for everyone.`
+    );
     if (!confirmed) return;
 
     const editionId = edition.id;
+    const deletedOrder = edition.order;
     clearEditionTimers();
     setSaveError(null);
     try {
-      await saveRankings({ remove: true, editionId });
-      setEditions((prev) => {
-        const next = prev.filter((item) => item.id !== editionId);
-        editionsRef.current = next;
-        return next;
-      });
-      setSelectedEditionId(activeEditionIdRef.current);
+      const data = await saveRankings({ remove: true, editionId });
+      const remaining = (editionsRef.current || []).filter(
+        (item) => item.id !== editionId
+      );
+      setEditions(remaining);
+      editionsRef.current = remaining;
+      if (data?.activeEditionId) {
+        activeEditionIdRef.current = data.activeEditionId;
+      }
+      const neighbor =
+        [...remaining].reverse().find((item) => item.order < deletedOrder) ||
+        [...remaining].sort((a, b) => a.order - b.order)[0];
+      setSelectedEditionId(neighbor?.id || data?.activeEditionId || null);
     } catch (err) {
       setSaveError(err.message);
     }
@@ -657,6 +673,7 @@ export default function App() {
         intro: edition.intro || '',
         activeEditionId: selectedEditionId
       });
+      updateEditionLocal(selectedEditionId, { published: true });
       setActiveEditionId(selectedEditionId);
     } catch (err) {
       setSaveError(err.message);
@@ -720,13 +737,13 @@ export default function App() {
                     Release
                   </button>
                 )}
-                {isUnpublished && (
+                {canDeleteSelected && (
                   <button
                     type="button"
                     className="danger"
                     onClick={handleDeleteEdition}
                   >
-                    Delete draft
+                    {isUnpublished ? 'Delete draft' : 'Delete week'}
                   </button>
                 )}
                 <button type="button" className="secondary" onClick={handleLock}>
@@ -781,7 +798,7 @@ export default function App() {
       {!loading && !error && (
         <nav className="week-nav" aria-label="Power ranking editions">
           {visibleEditions.map((edition) => {
-            const isDraft = isAdmin && edition.order > activeOrder;
+            const isDraft = isAdmin && edition.published === false;
             return (
               <button
                 key={edition.id}
