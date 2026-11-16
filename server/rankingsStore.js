@@ -110,6 +110,9 @@ function mergeEdition(storedEdition, seedEdition) {
         storedEdition.week != null ? storedEdition.week : seedEdition.week,
       order:
         storedEdition.order != null ? storedEdition.order : seedEdition.order,
+      weeks: storedEdition.weeks?.length
+        ? storedEdition.weeks
+        : seedEdition.weeks,
       label: storedEdition.label || seedEdition.label,
       teamIds: storedEdition.teamIds?.length
         ? storedEdition.teamIds
@@ -280,6 +283,7 @@ function buildNextRankings(current, payload = {}) {
     intro,
     label,
     week,
+    weeks,
     activeEditionId,
     remove
   } = payload;
@@ -295,7 +299,9 @@ function buildNextRankings(current, payload = {}) {
     owners === undefined &&
     meta === undefined &&
     intro === undefined &&
-    label === undefined
+    label === undefined &&
+    week === undefined &&
+    weeks === undefined
   ) {
     throw new Error("Nothing to save");
   }
@@ -353,11 +359,18 @@ function buildNextRankings(current, payload = {}) {
 
     const prevId = bucket.activeEditionId;
     const prev = bucket.editions[prevId] || emptyEdition(EDITION_TYPES.week);
+    const createWeeks =
+      weeks !== undefined
+        ? weeks
+        : editionWeek != null
+          ? [editionWeek]
+          : undefined;
     bucket.editions[targetId] = normalizeEdition({
       type: editionType,
       week: editionWeek,
+      weeks: createWeeks,
       order: nextOrder(bucket.editions),
-      label: defaultLabel(editionType, editionWeek, label),
+      label: defaultLabel(editionType, editionWeek, label, createWeeks),
       teamIds: Array.isArray(teamIds)
         ? teamIds
         : prev.teamIds?.length
@@ -375,10 +388,18 @@ function buildNextRankings(current, payload = {}) {
     if (!existing) {
       throw new Error(`Edition ${targetId} does not exist`);
     }
+    const nextWeeks = weeks !== undefined ? weeks : existing.weeks;
+    const nextWeek =
+      week !== undefined
+        ? week
+        : weeks !== undefined && Array.isArray(weeks) && weeks.length
+          ? Math.max(...weeks.map(Number).filter((n) => Number.isFinite(n)))
+          : existing.week;
     bucket.editions[targetId] = normalizeEdition({
       ...existing,
       type: type ? EDITION_TYPES[type] || existing.type : existing.type,
-      week: week !== undefined ? week : existing.week,
+      week: nextWeek,
+      weeks: nextWeeks,
       label: label !== undefined ? label : existing.label,
       teamIds: Array.isArray(teamIds) ? teamIds : existing.teamIds,
       blurbs: blurbs !== undefined ? asObject(blurbs) : existing.blurbs,

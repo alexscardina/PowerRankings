@@ -40,19 +40,48 @@ function editionIdFor(type, week) {
   return `week-${week}`;
 }
 
-function defaultLabel(type, week, customLabel) {
+function normalizeWeeks(value, fallbackWeek) {
+  const fromArray = Array.isArray(value)
+    ? value
+        .map((item) => Number(item))
+        .filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  const unique = [...new Set(fromArray)].sort((a, b) => a - b);
+  if (unique.length) return unique;
+  const week = Number(fallbackWeek);
+  return Number.isFinite(week) && week > 0 ? [week] : [];
+}
+
+function labelForWeeks(weeks) {
+  if (!weeks?.length) return "Week";
+  if (weeks.length === 1) return `Week ${weeks[0]}`;
+  if (weeks.length === 2) return `Weeks ${weeks[0]} & ${weeks[1]}`;
+  return `Weeks ${weeks[0]}–${weeks[weeks.length - 1]}`;
+}
+
+function defaultLabel(type, week, customLabel, weeks) {
   const custom = typeof customLabel === "string" ? customLabel.trim() : "";
   if (custom) return custom;
-  if (type === EDITION_TYPES.week) return `Week ${week}`;
+  if (type === EDITION_TYPES.week) {
+    const list = normalizeWeeks(weeks, week);
+    return labelForWeeks(list.length ? list : week != null ? [week] : []);
+  }
   return TYPE_LABELS[type] || type;
 }
 
-function emptyEdition(type, { week, order, label } = {}) {
+function emptyEdition(type, { week, weeks, order, label } = {}) {
+  const weekList = normalizeWeeks(weeks, week);
+  const primaryWeek = weekList.length
+    ? weekList[weekList.length - 1]
+    : week != null
+      ? Number(week)
+      : null;
   return {
     type,
-    week: week != null ? Number(week) : null,
+    week: primaryWeek,
+    weeks: weekList.length ? weekList : primaryWeek != null ? [primaryWeek] : [],
     order: order != null ? Number(order) : 0,
-    label: defaultLabel(type, week, label),
+    label: defaultLabel(type, primaryWeek, label, weekList),
     teamIds: [],
     blurbs: {},
     names: {},
@@ -87,18 +116,25 @@ function normalizeMeta(value) {
 
 function normalizeEdition(value, fallbackId) {
   const type = EDITION_TYPES[value?.type] || EDITION_TYPES.week;
-  const week =
+  const fallbackWeek =
     value?.week == null || value.week === ""
       ? type === EDITION_TYPES.week
         ? Number(String(fallbackId || "").replace(/\D/g, "")) || null
         : null
       : Number(value.week);
+  const weeks = normalizeWeeks(value?.weeks, fallbackWeek);
+  const week = weeks.length
+    ? weeks[weeks.length - 1]
+    : Number.isFinite(fallbackWeek)
+      ? fallbackWeek
+      : null;
 
   const edition = {
     type,
     week: Number.isFinite(week) ? week : null,
+    weeks,
     order: Number.isFinite(Number(value?.order)) ? Number(value.order) : 0,
-    label: defaultLabel(type, week, value?.label),
+    label: defaultLabel(type, week, value?.label, weeks),
     teamIds: Array.isArray(value?.teamIds) ? value.teamIds : [],
     blurbs: asObject(value?.blurbs),
     names: asObject(value?.names),
@@ -140,27 +176,29 @@ function sortedEditionEntries(editions) {
   });
 }
 
-function occupiedWeek(edition) {
-  if (!edition) return null;
+function occupiedWeeks(edition) {
+  if (!edition) return [];
   if (edition.type === EDITION_TYPES.midseason) {
     const week = Number(edition.week);
-    return Number.isFinite(week) ? week : 7;
+    return [Number.isFinite(week) ? week : 7];
   }
   if (edition.type === EDITION_TYPES.playoff) {
     const week = Number(edition.week);
-    return Number.isFinite(week) ? week : 14;
+    return [Number.isFinite(week) ? week : 14];
   }
-  if (edition.type === EDITION_TYPES.week && Number.isFinite(Number(edition.week))) {
-    return Number(edition.week);
+  if (edition.type === EDITION_TYPES.week) {
+    const weeks = normalizeWeeks(edition.weeks, edition.week);
+    return weeks.length ? weeks : [];
   }
-  return null;
+  return [];
 }
 
 function nextWeekNumber(editions) {
   const taken = new Set();
   for (const edition of Object.values(editions || {})) {
-    const week = occupiedWeek(edition);
-    if (week != null) taken.add(week);
+    for (const week of occupiedWeeks(edition)) {
+      taken.add(week);
+    }
   }
   let next = 1;
   while (taken.has(next)) next += 1;
@@ -232,12 +270,15 @@ module.exports = {
   asObject,
   slugify,
   editionIdFor,
+  normalizeWeeks,
+  labelForWeeks,
   defaultLabel,
   emptyEdition,
   normalizeEdition,
   normalizeMeta,
   stampPublished,
   sortedEditionEntries,
+  occupiedWeeks,
   nextWeekNumber,
   nextOrder,
   migrateLegacyYear

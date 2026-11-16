@@ -168,21 +168,11 @@ function teamNameFor(team, teamNames) {
   );
 }
 
-export default function buildTeamCardStats(
-  leagueData,
-  teams,
-  weekOverride,
-  teamNames = {}
-) {
-  const week = weekOverride ?? getCompletedWeek(leagueData);
-  const teamsById = new Map(teams.map((team) => [team.id, team]));
-  const schedule = leagueData.schedule || [];
-  const matchups = schedule.filter(
+function matchupRowsForWeek(schedule, teamsById, week, teamNames) {
+  const matchups = (schedule || []).filter(
     (matchup) => matchup.matchupPeriodId === week
   );
   const places = scoringPlaces(matchups);
-  const records = recordsThroughWeek(schedule, week);
-  const pointsByStatId = scoringPointsByStatId(leagueData);
   const byTeamId = {};
 
   for (const matchup of matchups) {
@@ -205,7 +195,6 @@ export default function buildTeamCardStats(
               ? "T"
               : "L";
       const scoring = places.get(side.self.teamId);
-      const record = records.get(side.self.teamId) || emptyRecord();
 
       byTeamId[side.self.teamId] = {
         week,
@@ -216,12 +205,54 @@ export default function buildTeamCardStats(
         opponentOwner: opponent?.owner || "",
         medianResult: scoring?.medianResult ?? null,
         scoringPlace: scoring?.place ?? null,
-        scoringPlaceLabel: scoring?.placeLabel ?? null,
-        record,
-        recordLabel: formatRecord(record)
+        scoringPlaceLabel: scoring?.placeLabel ?? null
       };
     }
   }
+
+  for (const [teamId, scoring] of places) {
+    if (byTeamId[teamId]) continue;
+    byTeamId[teamId] = {
+      week,
+      result: null,
+      points: scoring.points ?? null,
+      oppPoints: null,
+      opponentName: null,
+      opponentOwner: null,
+      medianResult: scoring.medianResult ?? null,
+      scoringPlace: scoring.place ?? null,
+      scoringPlaceLabel: scoring.placeLabel ?? null
+    };
+  }
+
+  return byTeamId;
+}
+
+export default function buildTeamCardStats(
+  leagueData,
+  teams,
+  weekOverride,
+  teamNames = {}
+) {
+  const weekList = Array.isArray(weekOverride)
+    ? [...new Set(weekOverride.map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort(
+        (a, b) => a - b
+      )
+    : null;
+  const week =
+    weekList?.length
+      ? weekList[weekList.length - 1]
+      : weekOverride ?? getCompletedWeek(leagueData);
+  const weeks = weekList?.length ? weekList : [week];
+  const teamsById = new Map(teams.map((team) => [team.id, team]));
+  const schedule = leagueData.schedule || [];
+  const records = recordsThroughWeek(schedule, week);
+  const pointsByStatId = scoringPointsByStatId(leagueData);
+  const weekRows = weeks.map((period) =>
+    matchupRowsForWeek(schedule, teamsById, period, teamNames)
+  );
+  const latestRows = weekRows[weekRows.length - 1] || {};
+  const byTeamId = {};
 
   for (const team of teams) {
     const entries = team.roster?.entries || [];
@@ -241,27 +272,43 @@ export default function buildTeamCardStats(
       }
     }
 
-    const scoring = places.get(team.id);
     const record = records.get(team.id) || emptyRecord();
+    const weeksForTeam = weeks.map((period, index) => {
+      const row = weekRows[index]?.[team.id];
+      return (
+        row || {
+          week: period,
+          result: null,
+          points: null,
+          oppPoints: null,
+          opponentName: null,
+          opponentOwner: null,
+          medianResult: null,
+          scoringPlace: null,
+          scoringPlaceLabel: null
+        }
+      );
+    });
+    const latest = latestRows[team.id] || weeksForTeam[weeksForTeam.length - 1];
 
     byTeamId[team.id] = {
       week,
-      result: null,
-      points: null,
-      oppPoints: null,
-      opponentName: null,
-      opponentOwner: null,
-      medianResult: scoring?.medianResult ?? null,
-      scoringPlace: scoring?.place ?? null,
-      scoringPlaceLabel: scoring?.placeLabel ?? null,
+      weeks: weeksForTeam,
+      result: latest?.result ?? null,
+      points: latest?.points ?? null,
+      oppPoints: latest?.oppPoints ?? null,
+      opponentName: latest?.opponentName ?? null,
+      opponentOwner: latest?.opponentOwner ?? null,
+      medianResult: latest?.medianResult ?? null,
+      scoringPlace: latest?.scoringPlace ?? null,
+      scoringPlaceLabel: latest?.scoringPlaceLabel ?? null,
       record,
       recordLabel: formatRecord(record),
-      ...byTeamId[team.id],
       topPlayer
     };
   }
 
-  return { week, byTeamId };
+  return { week, weeks, byTeamId };
 }
 
 function weekIsComplete(matchups) {

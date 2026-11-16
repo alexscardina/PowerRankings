@@ -222,6 +222,42 @@ body {
   resize: none;
 }
 
+.result-weeks-edit {
+  display: grid;
+  gap: 0.45rem;
+  margin: -0.75rem 0 1.5rem;
+  width: 100%;
+}
+
+.result-weeks-edit__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.result-weeks-edit__chip,
+.result-weeks-edit__add {
+  border: 1px solid rgba(242, 246, 243, 0.35);
+  background: rgba(15, 46, 34, 0.45);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.result-weeks-edit__chip:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.result-weeks-edit__chip:not(:disabled):hover,
+.result-weeks-edit__add:hover {
+  border-color: rgba(242, 246, 243, 0.7);
+  background: rgba(242, 246, 243, 0.12);
+}
+
 .week-nav__btn {
   border: 1px solid rgba(242, 246, 243, 0.35);
   background: transparent;

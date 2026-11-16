@@ -110,6 +110,7 @@ router.put("/rankings", async (req, res) => {
     intro,
     label,
     week,
+    weeks,
     activeEditionId,
     remove
   } = req.body || {};
@@ -146,9 +147,15 @@ router.put("/rankings", async (req, res) => {
     owners === undefined &&
     meta === undefined &&
     intro === undefined &&
+    week === undefined &&
+    weeks === undefined &&
+    label === undefined &&
     activeEditionId === undefined
   ) {
     return res.status(400).json({ error: "Nothing to save" });
+  }
+  if (weeks !== undefined && !Array.isArray(weeks)) {
+    return res.status(400).json({ error: "weeks must be an array" });
   }
 
   try {
@@ -165,6 +172,7 @@ router.put("/rankings", async (req, res) => {
       intro,
       label,
       week,
+      weeks,
       activeEditionId,
       remove: Boolean(remove)
     });

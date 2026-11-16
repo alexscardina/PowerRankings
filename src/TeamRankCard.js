@@ -639,53 +639,97 @@ function ArchivalWeekMiddle({ meta, badge }) {
   );
 }
 
-function MatchupMiddle({ stats, imgFailed, setImgFailed }) {
-  const isTopScorer = stats?.scoringPlace === 1;
-  const isBottomScorer = stats?.scoringPlace === 12;
+function MatchupWeekBlock({ row, showWeekPrefix }) {
+  const isTopScorer = row?.scoringPlace === 1;
+  const isBottomScorer = row?.scoringPlace === 12;
   const medianEmoji = isTopScorer ? ' 🏆' : isBottomScorer ? ' 💩' : '';
   const medianLine =
-    stats?.medianResult && stats?.scoringPlaceLabel
-      ? `${stats.medianResult} ${stats.scoringPlaceLabel}${medianEmoji}`
+    row?.medianResult && row?.scoringPlaceLabel
+      ? `${row.medianResult} ${row.scoringPlaceLabel}${medianEmoji}`
       : '—';
   const medianClass = [
     'team-rank-card__median',
-    stats?.medianResult === 'W' ? 'is-up' : '',
-    stats?.medianResult === 'L' ? 'is-down' : '',
+    row?.medianResult === 'W' ? 'is-up' : '',
+    row?.medianResult === 'L' ? 'is-down' : '',
     isTopScorer ? 'is-trophy' : '',
     isBottomScorer ? 'is-poop' : ''
   ]
     .filter(Boolean)
     .join(' ');
+  const weekPrefix = showWeekPrefix && row?.week != null ? `Week ${row.week} ` : '';
 
+  return (
+    <>
+      {row?.opponentName ? (
+        <p className="team-rank-card__matchup-line">
+          {showWeekPrefix ? (
+            <span className="team-rank-card__week-inline">{weekPrefix}H2H: </span>
+          ) : null}
+          <span
+            className={
+              row.result === 'W'
+                ? 'matchup-result is-win'
+                : row.result === 'L'
+                  ? 'matchup-result is-loss'
+                  : 'matchup-result'
+            }
+          >
+            {row.result}
+          </span>{' '}
+          {row.points?.toFixed?.(1) ?? row.points}–
+          {row.oppPoints?.toFixed?.(1) ?? row.oppPoints} vs{' '}
+          {row.opponentOwner || row.opponentName}
+        </p>
+      ) : (
+        <p className="team-rank-card__matchup-line">
+          {showWeekPrefix ? `${weekPrefix}H2H: ` : ''}
+          No matchup data
+        </p>
+      )}
+      <p className={medianClass}>
+        {showWeekPrefix ? `${weekPrefix}` : ''}
+        Median Performance: {medianLine}
+      </p>
+    </>
+  );
+}
+
+function MatchupMiddle({ stats, badge, imgFailed, setImgFailed }) {
+  const weekRows =
+    Array.isArray(stats?.weeks) && stats.weeks.length
+      ? stats.weeks
+      : [
+          {
+            week: stats?.week,
+            result: stats?.result,
+            points: stats?.points,
+            oppPoints: stats?.oppPoints,
+            opponentName: stats?.opponentName,
+            opponentOwner: stats?.opponentOwner,
+            medianResult: stats?.medianResult,
+            scoringPlace: stats?.scoringPlace,
+            scoringPlaceLabel: stats?.scoringPlaceLabel
+          }
+        ];
+  const showWeekPrefix = weekRows.length > 1;
   const topPlayer = stats?.topPlayer;
+  const badgeLabel =
+    badge ||
+    (weekRows.length > 1
+      ? `Weeks ${weekRows.map((row) => row.week).filter(Boolean).join(' & ')}`
+      : `Week ${stats?.week || '—'}`);
 
   return (
     <div className="team-rank-card__middle">
       <div className="team-rank-card__matchup">
-        <span className="team-rank-card__week-badge">
-          Week {stats?.week || '—'}
-        </span>
-        {stats?.opponentName ? (
-          <p className="team-rank-card__matchup-line">
-            <span
-              className={
-                stats.result === 'W'
-                  ? 'matchup-result is-win'
-                  : stats.result === 'L'
-                    ? 'matchup-result is-loss'
-                    : 'matchup-result'
-              }
-            >
-              {stats.result}
-            </span>{' '}
-            {stats.points?.toFixed?.(1) ?? stats.points}–
-            {stats.oppPoints?.toFixed?.(1) ?? stats.oppPoints} vs{' '}
-            {stats.opponentOwner || stats.opponentName}
-          </p>
-        ) : (
-          <p className="team-rank-card__matchup-line">No matchup data</p>
-        )}
-        <p className={medianClass}>Median Performance: {medianLine}</p>
+        <span className="team-rank-card__week-badge">{badgeLabel}</span>
+        {weekRows.map((row) => (
+          <MatchupWeekBlock
+            key={row.week ?? 'week'}
+            row={row}
+            showWeekPrefix={showWeekPrefix}
+          />
+        ))}
       </div>
       <div className="team-rank-card__player">
         <div className="team-rank-card__headshot">
@@ -777,6 +821,7 @@ function EditionMiddle({
     return (
       <MatchupMiddle
         stats={stats}
+        badge={editionLabel}
         imgFailed={imgFailed}
         setImgFailed={setImgFailed}
       />

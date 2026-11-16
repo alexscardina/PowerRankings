@@ -50,9 +50,40 @@ export function usesMetaMiddle(edition) {
   );
 }
 
+export function resultWeeksForEdition(edition) {
+  if (!edition) return [];
+  if (Array.isArray(edition.weeks) && edition.weeks.length) {
+    return [...new Set(edition.weeks.map(Number).filter((n) => Number.isFinite(n) && n > 0))].sort(
+      (a, b) => a - b
+    );
+  }
+  const week = Number(edition.week);
+  return Number.isFinite(week) && week > 0 ? [week] : [];
+}
+
+export function labelForResultWeeks(weeks) {
+  if (!weeks?.length) return 'Week';
+  if (weeks.length === 1) return `Week ${weeks[0]}`;
+  if (weeks.length === 2) return `Weeks ${weeks[0]} & ${weeks[1]}`;
+  return `Weeks ${weeks[0]}–${weeks[weeks.length - 1]}`;
+}
+
+export function isDefaultWeekLabel(label, weeks) {
+  if (!label || !weeks?.length) return false;
+  const trimmed = String(label).trim();
+  return (
+    trimmed === labelForResultWeeks(weeks) ||
+    /^Week\s+\d+$/i.test(trimmed) ||
+    /^Weeks?\s+\d+(\s*&\s*\d+|\s*[–-]\s*\d+)?$/i.test(trimmed)
+  );
+}
+
 export function scoringPeriodForEdition(edition) {
   if (!edition) return null;
-  if (edition.type === EDITION_TYPES.week && edition.week) return edition.week;
+  if (edition.type === EDITION_TYPES.week) {
+    const weeks = resultWeeksForEdition(edition);
+    if (weeks.length) return weeks[weeks.length - 1];
+  }
   if (edition.type === EDITION_TYPES.midseason && edition.week) {
     return edition.week;
   }

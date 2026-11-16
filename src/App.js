@@ -10,6 +10,9 @@ import {
   CREATE_TYPE_OPTIONS,
   EDITION_TYPES,
   previousEditionId,
+  isDefaultWeekLabel,
+  labelForResultWeeks,
+  resultWeeksForEdition,
   scoringPeriodForEdition,
   seasonStamp,
   usesEspnMatchup,
@@ -36,7 +39,9 @@ function mergeRemoteEditions(remote, local) {
       owners: current.owners,
       meta: current.meta,
       intro: current.intro,
-      label: current.label
+      label: current.label,
+      weeks: current.weeks,
+      week: current.week
     };
   });
 }
@@ -49,6 +54,35 @@ function archivalTeams(edition) {
     name: names[String(id)] || names[id] || String(id),
     owner: owners[String(id)] || owners[id] || 'Unknown'
   }));
+}
+
+function ResultWeeksEditor({ weeks, onAdd, onRemove }) {
+  const canRemove = weeks.length > 1;
+  return (
+    <div className="result-weeks-edit">
+      <span className="week-intro-edit__label">Result weeks</span>
+      <div className="result-weeks-edit__row">
+        {weeks.map((week) => (
+          <button
+            key={week}
+            type="button"
+            className="result-weeks-edit__chip"
+            onClick={() => onRemove(week)}
+            title={
+              canRemove ? `Remove week ${week}` : 'At least one week is required'
+            }
+            disabled={!canRemove}
+          >
+            Week {week}
+            {canRemove ? ' ×' : ''}
+          </button>
+        ))}
+        <button type="button" className="result-weeks-edit__add" onClick={onAdd}>
+          Add week
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function teamsFromEdition(edition, espnTeams) {
@@ -201,7 +235,13 @@ export default function App() {
     }
     const week = scoringPeriodForEdition(selectedEdition);
     if (usesEspnMatchup(selectedEdition, live)) {
-      return buildTeamCardStats(leagueData, espnTeams, week, teamNames);
+      const weeks = resultWeeksForEdition(selectedEdition);
+      return buildTeamCardStats(
+        leagueData,
+        espnTeams,
+        weeks.length ? weeks : week,
+        teamNames
+      );
     }
     if (usesEspnSeasonStats(selectedEdition, live)) {
       return buildMidseasonCardStats(leagueData, espnTeams, week);
@@ -431,6 +471,12 @@ export default function App() {
         if (patch.label !== undefined) {
           updated.label = patch.label;
         }
+        if (patch.weeks !== undefined) {
+          updated.weeks = patch.weeks;
+        }
+        if (patch.week !== undefined) {
+          updated.week = patch.week;
+        }
         if (patch.published !== undefined) {
           updated.published = patch.published;
         }
@@ -511,6 +557,82 @@ export default function App() {
         label: typeof edition?.label === 'string' ? edition.label : value
       }).catch((err) => setSaveError(err.message));
     });
+  }
+
+  function takenResultWeeks(exceptEditionId) {
+    const taken = new Set();
+    for (const edition of editionsRef.current || []) {
+      if (edition.id === exceptEditionId) continue;
+      if (edition.type === EDITION_TYPES.midseason) {
+        taken.add(Number(edition.week) || 7);
+        continue;
+      }
+      if (edition.type === EDITION_TYPES.playoff) {
+        taken.add(Number(edition.week) || 14);
+        continue;
+      }
+      if (edition.type !== EDITION_TYPES.week) continue;
+      for (const week of resultWeeksForEdition(edition)) {
+        taken.add(week);
+      }
+    }
+    return taken;
+  }
+
+  function handleResultWeeksChange(nextWeeks) {
+    const editionId = selectedEditionRef.current;
+    const edition = editionsRef.current.find((e) => e.id === editionId);
+    if (!edition) return;
+
+    const weeks = [
+      ...new Set(
+        (nextWeeks || [])
+          .map(Number)
+          .filter((n) => Number.isFinite(n) && n > 0)
+      )
+    ].sort((a, b) => a - b);
+    if (!weeks.length) return;
+
+    const week = weeks[weeks.length - 1];
+    const patch = { weeks, week };
+    const currentLabel =
+      typeof edition.label === 'string' ? edition.label : draftTitle;
+    if (isDefaultWeekLabel(currentLabel, resultWeeksForEdition(edition))) {
+      patch.label = labelForResultWeeks(weeks);
+      setDraftTitle(patch.label);
+    }
+    updateEditionLocal(editionId, patch);
+    queueEditionSave(labelTimer, () => {
+      const latest = editionsRef.current.find((e) => e.id === editionId);
+      saveRankings({
+        editionId,
+        weeks: latest?.weeks || weeks,
+        week: latest?.week ?? week,
+        label: latest?.label
+      }).catch((err) => setSaveError(err.message));
+    });
+  }
+
+  function handleAddResultWeek() {
+    const editionId = selectedEditionRef.current;
+    const current = resultWeeksForEdition(
+      editionsRef.current.find((e) => e.id === editionId)
+    );
+    const taken = takenResultWeeks(editionId);
+    for (const week of current) taken.add(week);
+    let next = (current[current.length - 1] || 0) + 1;
+    while (taken.has(next) && next < 30) next += 1;
+    if (next >= 30) return;
+    handleResultWeeksChange([...current, next]);
+  }
+
+  function handleRemoveResultWeek(weekToRemove) {
+    const editionId = selectedEditionRef.current;
+    const current = resultWeeksForEdition(
+      editionsRef.current.find((e) => e.id === editionId)
+    );
+    if (current.length <= 1) return;
+    handleResultWeeksChange(current.filter((week) => week !== weekToRemove));
   }
 
   function handleIntroChange(value) {
@@ -823,18 +945,27 @@ export default function App() {
       {loading && <p>Loading…</p>}
       {error && <p>Error: {error}</p>}
       {!loading && !error && isAdmin && selectedEdition && (
-        <label className="week-intro-edit">
-          <span className="week-intro-edit__label">Title</span>
-          <input
-            className="week-intro-edit__input week-intro-edit__title"
-            value={draftTitle}
-            placeholder="Week title"
-            onChange={(e) => {
-              setDraftTitle(e.target.value);
-              handleLabelChange(e.target.value);
-            }}
-          />
-        </label>
+        <>
+          <label className="week-intro-edit">
+            <span className="week-intro-edit__label">Title</span>
+            <input
+              className="week-intro-edit__input week-intro-edit__title"
+              value={draftTitle}
+              placeholder="Week title"
+              onChange={(e) => {
+                setDraftTitle(e.target.value);
+                handleLabelChange(e.target.value);
+              }}
+            />
+          </label>
+          {live && selectedEdition.type === EDITION_TYPES.week && (
+            <ResultWeeksEditor
+              weeks={resultWeeksForEdition(selectedEdition)}
+              onAdd={handleAddResultWeek}
+              onRemove={handleRemoveResultWeek}
+            />
+          )}
+        </>
       )}
       {!loading && !error && isAdmin && (
         <label className="week-intro-edit">
